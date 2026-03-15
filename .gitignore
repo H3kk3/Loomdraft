@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+public/
+
+# Rust / Tauri
+src-tauri/target/
+
+# Hugo build output
+docs/public/
+
+# Environment
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace

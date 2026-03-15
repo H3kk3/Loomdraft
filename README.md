@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/static/images/logo.png" alt="Loomdraft" width="128">
+</p>
+
 # Loomdraft
 
 **A distraction-free writing app for novelists, built for your desktop.**
