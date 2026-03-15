@@ -1,0 +1,267 @@
+/* ── Sidebar ───────────────────────────────────────────────────────────────── */
+
+.sidebar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.project-name {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 18px;
+  padding: 0 4px;
+  line-height: 1;
+}
+.icon-btn:hover {
+  color: var(--text);
+  border-color: transparent;
+  background: none;
+}
+
+.tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+/* ── Tree nodes ────────────────────────────────────────────────────────────── */
+
+.tree-row {
+  position: relative; /* needed for ::before / ::after drop indicators */
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  margin: 1px 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.tree-row:hover {
+  background: var(--bg-3);
+}
+.tree-row.selected {
+  background: var(--accent);
+  color: #fff;
+}
+.tree-row.folder {
+  cursor: default;
+}
+
+/* Drop-position indicators — pseudo-elements on the row itself so the row
+   never moves when an indicator appears (moving the row would shift the drop
+   target out from under the cursor, preventing the drop event from firing). */
+.tree-row.drop-before::before,
+.tree-row.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--drop-line);
+  border-radius: 1px;
+  pointer-events: none;
+}
+.tree-row.drop-before::before {
+  top: -2px;
+}
+.tree-row.drop-after::after {
+  bottom: -2px;
+}
+
+/* "Inside" drop shows an indented line to indicate nesting into the target. */
+.tree-row.drop-inside::after {
+  content: "";
+  position: absolute;
+  left: 22px;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: var(--drop-line);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.tree-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--text-dim);
+}
+.tree-row.selected .tree-icon {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.tree-title {
+  flex: 1;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-add-btn {
+  visibility: hidden;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.tree-row:hover .tree-add-btn,
+.tree-row.selected .tree-add-btn {
+  visibility: visible;
+}
+.tree-add-btn:hover {
+  color: var(--text);
+  background: none;
+  border-color: transparent;
+}
+
+.tree-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 10px 4px;
+  padding: 0 6px;
+}
+
+.tree-section-label {
+  margin: 0;
+  padding: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.tree-section-add-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+.tree-section-add-btn:hover {
+  color: var(--text);
+  border-color: transparent;
+  background: none;
+}
+
+.tree-section-divider {
+  height: 1px;
+  margin: 8px 10px;
+  background: var(--border);
+  opacity: 0.75;
+}
+
+.tree-empty-hint {
+  margin: 0 14px 6px 30px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* ── Context menu ──────────────────────────────────────────────────────────── */
+
+.context-menu {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  min-width: 140px;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.context-menu-item {
+  background: none;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+  padding: 7px 14px;
+  font-size: 13px;
+  color: var(--text);
+  width: 100%;
+}
+.context-menu-item:hover {
+  background: var(--bg-2);
+  border-color: transparent;
+}
+.context-menu-item.danger {
+  color: var(--danger);
+}
+.context-menu-item.danger:hover {
+  background: rgba(224, 82, 82, 0.12);
+}
+
+/* ── Drag and drop (pointer-event based) ──────────────────────────────────── */
+
+.tree-row.dragging {
+  opacity: 0.4;
+}
+
+/* During an active drag, force grabbing cursor everywhere and prevent
+   text selection that would interfere with the drag interaction. */
+body.dragging-active {
+  cursor: grabbing !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+body.dragging-active * {
+  cursor: grabbing !important;
+}
+
+/* .tree-node must not clip ::before/::after indicators that extend -2px
+   outside the row bounds. */
+.tree-node {
+  overflow: visible;
+}
+
+/* ── Inline rename input ───────────────────────────────────────────────────── */
+
+.tree-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+  font-size: 13px;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  outline: none;
+}

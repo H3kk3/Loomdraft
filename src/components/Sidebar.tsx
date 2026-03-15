@@ -1,0 +1,412 @@
+import { useRef, useState, useEffect, useCallback, memo } from "react";
+import {
+  Library,
+  BookOpen,
+  Film,
+  Pause,
+  Scissors,
+  User,
+  MapPin,
+  Sword,
+  Building2,
+  CalendarDays,
+  ScrollText,
+  ListTree,
+  Microscope,
+  StickyNote,
+  FileText,
+  Download,
+  Palette,
+  Search,
+} from "lucide-react";
+import type { Theme } from "../useTheme";
+import type { ThemeMetadata, FontInfo, FontPreference } from "../themes/themeTypes";
+import { ThemePicker } from "./ThemePicker";
+import type { ProjectManifest } from "../types";
+import type { DocCategory } from "../docTypes";
+import { DRAG_THRESHOLD_PX } from "../constants";
+import { TreeNode, type DropTarget, type DropPos } from "./TreeNode";
+import { ContextMenu } from "./ContextMenu";
+import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface DragState {
+  nodeId: string;
+  startX: number;
+  startY: number;
+  active: boolean;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function findParent(manifest: ProjectManifest, nodeId: string): string | null {
+  for (const [id, node] of Object.entries(manifest.nodes)) {
+    if (node.children.includes(nodeId)) return id;
+  }
+  return null;
+}
+
+// ── DocTypeIcon ───────────────────────────────────────────────────────────────
+
+export const DocTypeIcon = memo(function DocTypeIcon({ docType }: { docType?: string }) {
+  const props = { size: 14, strokeWidth: 1.75 };
+  switch (docType) {
+    case "part":
+      return <Library {...props} />;
+    case "chapter":
+      return <BookOpen {...props} />;
+    case "scene":
+      return <Film {...props} />;
+    case "interlude":
+      return <Pause {...props} />;
+    case "snippet":
+      return <Scissors {...props} />;
+    case "character":
+      return <User {...props} />;
+    case "location":
+    case "place":
+      return <MapPin {...props} />;
+    case "item":
+      return <Sword {...props} />;
+    case "organization":
+      return <Building2 {...props} />;
+    case "event":
+      return <CalendarDays {...props} />;
+    case "lore":
+      return <ScrollText {...props} />;
+    case "outline":
+      return <ListTree {...props} />;
+    case "research":
+      return <Microscope {...props} />;
+    case "note":
+    case "manuscript":
+      return <StickyNote {...props} />;
+    default:
+      return <FileText {...props} />;
+  }
+});
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+
+export interface SidebarProps {
+  manifest: ProjectManifest;
+  selectedId: string | null;
+  onSelectNode: (id: string) => void;
+  onAddChild: (parentId: string, category?: DocCategory) => void;
+  onMoveNode: (draggingId: string, newParentId: string, position: number) => void;
+  onDeleteNode: (nodeId: string) => void;
+  onRenameNode: (nodeId: string, newTitle: string) => void;
+  onExport: () => void;
+  onClose: () => void;
+  onSearch: () => void;
+  theme: Theme;
+  onToggleTheme: () => void;
+  // Extended theme system
+  activeThemeId: string;
+  builtinThemes: ThemeMetadata[];
+  customThemes: ThemeMetadata[];
+  onSetTheme: (id: string) => void;
+  onImportTheme: () => void;
+  onDeleteCustomTheme: (id: string) => void;
+  customFonts: FontInfo[];
+  fontPrefs: FontPreference;
+  onImportFont: (target: "ui" | "mono") => void;
+  onResetFont: (target: "ui" | "mono") => void;
+}
+
+export function Sidebar({
+  manifest,
+  selectedId,
+  onSelectNode,
+  onAddChild,
+  onMoveNode,
+  onDeleteNode,
+  onRenameNode,
+  onExport,
+  onClose,
+  onSearch,
+  theme: _theme,
+  onToggleTheme: _onToggleTheme,
+  activeThemeId,
+  builtinThemes,
+  customThemes,
+  onSetTheme,
+  onImportTheme,
+  onDeleteCustomTheme,
+  customFonts,
+  fontPrefs,
+  onImportFont,
+  onResetFont,
+}: SidebarProps) {
+  const rootNode = manifest.nodes[manifest.root];
+
+  // ── Pointer-event drag system ──────────────────────────────────────────────
+  //
+  // HTML5 DnD is unreliable in Tauri's WKWebView on macOS (dragover/drop
+  // events don't propagate). Pointer events work perfectly everywhere.
+
+  const dragRef = useRef<DragState | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const dropTargetRef = useRef<DropTarget | null>(null);
+
+  // Keep ref in sync with state so pointerup can read the latest value
+  useEffect(() => {
+    dropTargetRef.current = dropTarget;
+  }, [dropTarget]);
+
+  const handleDragStart = useCallback((nodeId: string, x: number, y: number) => {
+    dragRef.current = { nodeId, startX: x, startY: y, active: false };
+  }, []);
+
+  const handleTreeDrop = (srcId: string, targetId: string, pos: DropPos) => {
+    let newParentId: string;
+    let newPosition: number;
+
+    if (pos === "inside") {
+      newParentId = targetId;
+      newPosition = manifest.nodes[targetId]?.children.length ?? 0;
+    } else {
+      const parentId = findParent(manifest, targetId);
+      if (!parentId) return;
+      newParentId = parentId;
+      const siblings = manifest.nodes[parentId].children;
+      const targetIdx = siblings.indexOf(targetId);
+      newPosition = pos === "before" ? targetIdx : targetIdx + 1;
+
+      // Same-parent adjustment: removing srcId shifts later siblings by -1
+      if (findParent(manifest, srcId) === newParentId) {
+        const oldIdx = siblings.indexOf(srcId);
+        if (oldIdx !== -1 && oldIdx < newPosition) newPosition -= 1;
+      }
+    }
+
+    onMoveNode(srcId, newParentId, newPosition);
+  };
+
+  // Document-level pointer listeners for drag tracking
+  useEffect(() => {
+    const onPointerMove = (e: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+
+      // Activation threshold: 5px movement before entering drag mode
+      if (!drag.active) {
+        const dx = e.clientX - drag.startX;
+        const dy = e.clientY - drag.startY;
+        if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) return;
+        drag.active = true;
+        document.body.classList.add("dragging-active");
+        window.getSelection()?.removeAllRanges(); // clear any selection that snuck through
+        setDraggingId(drag.nodeId);
+      }
+
+      // Hit-test: find the .tree-row under the cursor
+      const els = document.elementsFromPoint(e.clientX, e.clientY);
+      const rowEl = els.find(
+        (el) => el instanceof HTMLElement && el.classList.contains("tree-row"),
+      ) as HTMLElement | undefined;
+
+      if (!rowEl) {
+        setDropTarget(null);
+        return;
+      }
+
+      const targetId = rowEl.dataset.nodeId;
+      if (!targetId || targetId === drag.nodeId) {
+        setDropTarget(null);
+        return;
+      }
+
+      // Calculate drop position from cursor vs row bounds
+      const rect = rowEl.getBoundingClientRect();
+      let pos: DropPos;
+      if (targetId === manifest.root) {
+        pos = "inside";
+      } else if (e.clientY < rect.top + rect.height / 2) {
+        pos = "before";
+      } else {
+        pos = e.clientX > rect.left + rect.width / 2 ? "inside" : "after";
+      }
+
+      setDropTarget((prev) =>
+        prev?.overId === targetId && prev.position === pos
+          ? prev
+          : { overId: targetId, position: pos },
+      );
+    };
+
+    const onPointerUp = (_e: PointerEvent) => {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      document.body.classList.remove("dragging-active");
+
+      if (!drag?.active) {
+        // Was not a real drag (didn't exceed threshold) — clean up silently
+        setDraggingId(null);
+        setDropTarget(null);
+        return;
+      }
+
+      const target = dropTargetRef.current;
+      if (target && target.overId !== drag.nodeId) {
+        handleTreeDrop(drag.nodeId, target.overId, target.position);
+      }
+
+      setDraggingId(null);
+      setDropTarget(null);
+    };
+
+    const onSelectStart = (e: Event) => {
+      if (dragRef.current?.active) e.preventDefault();
+    };
+
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("selectstart", onSelectStart);
+    return () => {
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("selectstart", onSelectStart);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifest, onMoveNode]);
+
+  // ── Theme picker ────────────────────────────────────────────────────────────
+
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const themeBtnRef = useRef<HTMLButtonElement>(null);
+
+  // ── Context menu & delete ──────────────────────────────────────────────────
+
+  const [contextMenu, setContextMenu] = useState<{
+    nodeId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+
+  // ── Stable callback refs for TreeNode (prevent memo-busting) ─────────────
+
+  const handleAddChild = useCallback((parentId: string) => onAddChild(parentId), [onAddChild]);
+  const handleAddToRootSection = useCallback(
+    (category: DocCategory) => onAddChild(manifest.root, category),
+    [onAddChild, manifest.root],
+  );
+  const handleContextMenu = useCallback(
+    (id: string, x: number, y: number) => setContextMenu({ nodeId: id, x, y }),
+    [],
+  );
+  const handleRenameCommit = useCallback(
+    (id: string, title: string) => {
+      setRenamingId(null);
+      onRenameNode(id, title);
+    },
+    [onRenameNode],
+  );
+  const handleRenameCancel = useCallback(() => setRenamingId(null), []);
+  const handleStartRename = useCallback((id: string) => setRenamingId(id), []);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-header">
+        <span className="project-name">{rootNode?.title ?? "Project"}</span>
+        <div style={{ display: "flex", gap: "2px" }}>
+          <button className="icon-btn" title="Search (Ctrl+Shift+F)" onClick={onSearch}>
+            <Search size={15} strokeWidth={1.75} />
+          </button>
+          <button
+            ref={themeBtnRef}
+            className="icon-btn"
+            title="Themes"
+            onClick={() => setShowThemePicker((v) => !v)}
+          >
+            <Palette size={15} strokeWidth={1.75} />
+          </button>
+          <button className="icon-btn" title="Export manuscript" onClick={onExport}>
+            <Download size={15} strokeWidth={1.75} />
+          </button>
+          <button className="icon-btn" title="Close project" onClick={onClose}>
+            ×
+          </button>
+        </div>
+      </div>
+
+      {showThemePicker && (
+        <ThemePicker
+          activeThemeId={activeThemeId}
+          builtinThemes={builtinThemes}
+          customThemes={customThemes}
+          customFonts={customFonts}
+          fontPrefs={fontPrefs}
+          onSelectTheme={(id) => {
+            onSetTheme(id);
+          }}
+          onImportTheme={onImportTheme}
+          onDeleteCustomTheme={onDeleteCustomTheme}
+          onImportFont={onImportFont}
+          onResetFont={onResetFont}
+          onClose={() => setShowThemePicker(false)}
+        />
+      )}
+
+      <div className="tree">
+        <TreeNode
+          nodeId={manifest.root}
+          manifest={manifest}
+          selectedId={selectedId}
+          draggingId={draggingId}
+          dropTarget={dropTarget}
+          renamingId={renamingId}
+          onSelect={onSelectNode}
+          onAddChild={handleAddChild}
+          onAddToRootSection={handleAddToRootSection}
+          onContextMenu={handleContextMenu}
+          onDragStart={handleDragStart}
+          onRenameCommit={handleRenameCommit}
+          onRenameCancel={handleRenameCancel}
+          onStartRename={handleStartRename}
+          depth={0}
+        />
+      </div>
+
+      {contextMenu && (
+        <ContextMenu
+          nodeId={contextMenu.nodeId}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          isRoot={contextMenu.nodeId === manifest.root}
+          onAddChild={(id) => {
+            setContextMenu(null);
+            onAddChild(id);
+          }}
+          onRename={(id) => {
+            setContextMenu(null);
+            setRenamingId(id);
+          }}
+          onDelete={(id) => {
+            setContextMenu(null);
+            setDeleteTarget(id);
+          }}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {deleteTarget && manifest.nodes[deleteTarget] && (
+        <DeleteConfirmDialog
+          nodeId={deleteTarget}
+          manifest={manifest}
+          onConfirm={(id) => {
+            setDeleteTarget(null);
+            onDeleteNode(id);
+          }}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+    </aside>
+  );
+}

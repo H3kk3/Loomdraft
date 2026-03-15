@@ -1,0 +1,22 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ .Site.Title }}</title>
+<meta name="description" content="{{ .Site.Params.description }}">
+
+<!-- Open Graph -->
+<meta property="og:title" content="{{ .Site.Title }}">
+<meta property="og:description" content="{{ .Site.Params.description }}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ .Site.BaseURL }}">
+<meta property="og:image" content="{{ .Site.BaseURL }}images/og-image.png">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ .Site.Title }}">
+<meta name="twitter:description" content="{{ .Site.Params.description }}">
+
+<!-- Favicon -->
+<link rel="icon" type="image/png" href="{{ "images/logo.png" | relURL }}">
+
+<!-- Styles -->
+<link rel="stylesheet" href="{{ "css/style.css" | relURL }}">

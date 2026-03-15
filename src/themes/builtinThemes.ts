@@ -1,0 +1,250 @@
+import type { ThemeDefinition, ThemeMetadata } from "./themeTypes";
+
+// ── Built-in Theme Definitions ───────────────────────────────────────────────
+
+const dark: ThemeDefinition = {
+  name: "Dark",
+  id: "dark",
+  author: "Loomdraft",
+  version: 1,
+  appearance: "dark",
+  colors: {
+    bg: "#1a1a1e",
+    "bg-2": "#222228",
+    "bg-3": "#2a2a32",
+    border: "#3a3a46",
+    text: "#e0e0ea",
+    "text-dim": "#888899",
+    accent: "#7b6ef6",
+    "accent-h": "#9a8ffe",
+    "drop-line": "#9db3c9",
+    danger: "#e05252",
+    radius: "6px",
+  },
+  syntax: {
+    heading: "#9a8ffe",
+    emphasis: "#c4b5fd",
+    strong: "#e0e0ea",
+    link: "#7b6ef6",
+    code: "#a8d8b9",
+    quote: "#888899",
+    list: "#9a8ffe",
+    meta: "#5a5a6e",
+  },
+};
+
+const light: ThemeDefinition = {
+  name: "Light",
+  id: "light",
+  author: "Loomdraft",
+  version: 1,
+  appearance: "light",
+  colors: {
+    bg: "#ffffff",
+    "bg-2": "#f5f5f7",
+    "bg-3": "#eaeaee",
+    border: "#d0d0d8",
+    text: "#1a1a2e",
+    "text-dim": "#6b6b80",
+    accent: "#6356e0",
+    "accent-h": "#4f44c8",
+    "drop-line": "#6b8eaa",
+    danger: "#d93636",
+    radius: "6px",
+  },
+  syntax: {
+    heading: "#4f44c8",
+    emphasis: "#7c3aed",
+    strong: "#1a1a2e",
+    link: "#6356e0",
+    code: "#047857",
+    quote: "#6b6b80",
+    list: "#4f44c8",
+    meta: "#9ca3af",
+  },
+};
+
+const midnightJazz: ThemeDefinition = {
+  name: "Midnight Jazz",
+  id: "midnight-jazz",
+  author: "Loomdraft",
+  version: 1,
+  appearance: "dark",
+  colors: {
+    bg: "#0f1628",
+    "bg-2": "#161d33",
+    "bg-3": "#1e263e",
+    border: "#2a3454",
+    text: "#e0dce8",
+    "text-dim": "#7b7f9e",
+    accent: "#d4a843",
+    "accent-h": "#e6be5a",
+    "drop-line": "#7b8dba",
+    danger: "#e05252",
+    radius: "6px",
+  },
+  syntax: {
+    heading: "#e6be5a",
+    emphasis: "#c8a0e0",
+    strong: "#e0dce8",
+    link: "#5b9fd4",
+    code: "#8bc4a0",
+    quote: "#7b7f9e",
+    list: "#d4a843",
+    meta: "#5a5e7e",
+  },
+};
+
+const forestCanopy: ThemeDefinition = {
+  name: "Forest Canopy",
+  id: "forest-canopy",
+  author: "Loomdraft",
+  version: 1,
+  appearance: "dark",
+  colors: {
+    bg: "#0e1a14",
+    "bg-2": "#142118",
+    "bg-3": "#1b2a20",
+    border: "#2d3f30",
+    text: "#d8e4da",
+    "text-dim": "#7a9480",
+    accent: "#6ab04c",
+    "accent-h": "#85cc68",
+    "drop-line": "#8aab7d",
+    danger: "#d94040",
+    radius: "6px",
+  },
+  syntax: {
+    heading: "#85cc68",
+    emphasis: "#c9b458",
+    strong: "#d8e4da",
+    link: "#5ba5a0",
+    code: "#a3c9a0",
+    quote: "#7a9480",
+    list: "#6ab04c",
+    meta: "#4a6a4e",
+  },
+};
+
+const sunsetDrift: ThemeDefinition = {
+  name: "Sunset Drift",
+  id: "sunset-drift",
+  author: "Loomdraft",
+  version: 1,
+  appearance: "dark",
+  colors: {
+    bg: "#1c1412",
+    "bg-2": "#241b18",
+    "bg-3": "#2e2320",
+    border: "#4a3530",
+    text: "#ece0d8",
+    "text-dim": "#9a8578",
+    accent: "#e07850",
+    "accent-h": "#f09070",
+    "drop-line": "#c49878",
+    danger: "#e05252",
+    radius: "6px",
+  },
+  syntax: {
+    heading: "#f09070",
+    emphasis: "#e0b080",
+    strong: "#ece0d8",
+    link: "#6bafb0",
+    code: "#b8c890",
+    quote: "#9a8578",
+    list: "#e07850",
+    meta: "#6a544a",
+  },
+};
+
+const arcticFog: ThemeDefinition = {
+  name: "Arctic Fog",
+  id: "arctic-fog",
+  author: "Loomdraft",
+  version: 1,
+  appearance: "light",
+  colors: {
+    bg: "#f0f4f8",
+    "bg-2": "#e4eaf0",
+    "bg-3": "#d4dde8",
+    border: "#b8c4d4",
+    text: "#1a2438",
+    "text-dim": "#5a6a80",
+    accent: "#3a7bd5",
+    "accent-h": "#2a5fad",
+    "drop-line": "#7a9abe",
+    danger: "#d03030",
+    radius: "6px",
+  },
+  syntax: {
+    heading: "#2a5fad",
+    emphasis: "#6a4cad",
+    strong: "#1a2438",
+    link: "#3a7bd5",
+    code: "#2a7a5a",
+    quote: "#5a6a80",
+    list: "#2a5fad",
+    meta: "#8a98a8",
+  },
+};
+
+const sepiaStudy: ThemeDefinition = {
+  name: "Sepia Study",
+  id: "sepia-study",
+  author: "Loomdraft",
+  version: 1,
+  appearance: "light",
+  colors: {
+    bg: "#faf6ee",
+    "bg-2": "#f0ebe0",
+    "bg-3": "#e5ded0",
+    border: "#c8bea8",
+    text: "#2a2218",
+    "text-dim": "#7a6e58",
+    accent: "#a06828",
+    "accent-h": "#8a5820",
+    "drop-line": "#b09878",
+    danger: "#c03020",
+    radius: "6px",
+  },
+  syntax: {
+    heading: "#8a5820",
+    emphasis: "#8a4080",
+    strong: "#2a2218",
+    link: "#a06828",
+    code: "#487048",
+    quote: "#7a6e58",
+    list: "#8a5820",
+    meta: "#a8a090",
+  },
+};
+
+// ── Exports ──────────────────────────────────────────────────────────────────
+
+/** All built-in themes indexed by id */
+export const BUILTIN_THEMES: Record<string, ThemeDefinition> = {
+  dark: dark,
+  light: light,
+  "midnight-jazz": midnightJazz,
+  "forest-canopy": forestCanopy,
+  "sunset-drift": sunsetDrift,
+  "arctic-fog": arcticFog,
+  "sepia-study": sepiaStudy,
+};
+
+/** Ordered list of built-in theme metadata (for the picker UI) */
+export const BUILTIN_THEME_LIST: ThemeMetadata[] = [
+  dark,
+  light,
+  midnightJazz,
+  forestCanopy,
+  sunsetDrift,
+  arcticFog,
+  sepiaStudy,
+].map((t) => ({
+  name: t.name,
+  id: t.id,
+  appearance: t.appearance,
+  author: t.author,
+  isBuiltin: true,
+}));

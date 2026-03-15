@@ -1,0 +1,113 @@
+import { useRef, useState, useEffect } from "react";
+
+export interface ContextMenuProps {
+  nodeId: string;
+  x: number;
+  y: number;
+  isRoot: boolean;
+  onAddChild: (id: string) => void;
+  onRename: (id: string) => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+}
+
+export function ContextMenu({
+  nodeId,
+  x,
+  y,
+  isRoot,
+  onAddChild,
+  onRename,
+  onDelete,
+  onClose,
+}: ContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [focusIdx, setFocusIdx] = useState(0);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) onClose();
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  // Focus first item on open & handle keyboard navigation
+  useEffect(() => {
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>(".context-menu-item");
+    items?.[focusIdx]?.focus();
+  }, [focusIdx]);
+
+  useEffect(() => {
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>(".context-menu-item");
+    items?.[0]?.focus();
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>(".context-menu-item");
+    if (!items?.length) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setFocusIdx((i) => (i + 1) % items.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setFocusIdx((i) => (i - 1 + items.length) % items.length);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      ref={menuRef}
+      className="context-menu"
+      role="menu"
+      style={{
+        position: "fixed",
+        top: Math.min(y, window.innerHeight - 160),
+        left: Math.min(x, window.innerWidth - 160),
+        zIndex: 200,
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onKeyDown={handleKeyDown}
+    >
+      {!isRoot && (
+        <button
+          className="context-menu-item"
+          role="menuitem"
+          onClick={() => {
+            onAddChild(nodeId);
+            onClose();
+          }}
+        >
+          Add child
+        </button>
+      )}
+      {!isRoot && (
+        <button
+          className="context-menu-item"
+          role="menuitem"
+          onClick={() => {
+            onRename(nodeId);
+            onClose();
+          }}
+        >
+          Rename
+        </button>
+      )}
+      {!isRoot && (
+        <button
+          className="context-menu-item danger"
+          role="menuitem"
+          onClick={() => {
+            onDelete(nodeId);
+            onClose();
+          }}
+        >
+          Delete…
+        </button>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,197 @@
+/* ── Editor toolbar ────────────────────────────────────────────────────────── */
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 3px 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    background 0.12s,
+    border-color 0.12s;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-3);
+  border-color: var(--border);
+}
+
+.toolbar-btn:active:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.toolbar-btn.active {
+  color: var(--accent-h);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: var(--accent);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.toolbar-label {
+  font-size: 11px;
+  font-family: var(--font);
+  letter-spacing: 0.01em;
+}
+
+.toolbar-count {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  padding-left: 1px;
+}
+
+.toolbar-link-picker {
+  position: relative;
+}
+
+.link-picker-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 280px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  padding: 8px;
+  z-index: 500;
+}
+
+.link-picker-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+.link-picker-list {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.link-picker-item {
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font);
+}
+
+.link-picker-item:hover,
+.link-picker-item.active {
+  background: var(--bg-3);
+  border-color: var(--border);
+}
+
+.link-picker-empty {
+  padding: 7px 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-family: var(--font);
+}
+
+/* Custom CSS tooltip — shown ONLY on hover, never on click/focus.
+   Replaces native title= attribute which behaves unpredictably in WKWebView. */
+.toolbar-btn[data-tooltip] {
+  position: relative;
+}
+
+.toolbar-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-3);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  /* Small delay so tooltips don't flash when moving quickly across buttons */
+  transition: opacity 0.12s ease 0.4s;
+  z-index: 400;
+}
+
+/* Arrow pointing down from tooltip to button */
+.toolbar-btn[data-tooltip]::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--border);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease 0.4s;
+  z-index: 400;
+}
+
+.toolbar-btn[data-tooltip]:hover::after,
+.toolbar-btn[data-tooltip]:hover::before {
+  opacity: 1;
+}
+
+/* Disabled buttons should not show tooltips */
+.toolbar-btn[data-tooltip]:disabled::after,
+.toolbar-btn[data-tooltip]:disabled::before {
+  display: none;
+}

@@ -1,0 +1,11 @@
+baseURL = "https://h3kk3.github.io/Loomdraft/"
+languageCode = "en"
+title = "Loomdraft — Local-First Writing App"
+
+[params]
+  description = "A distraction-free desktop writing app for novelists, screenwriters, and long-form creative writers"
+  version = "0.1.0"
+  githubRepo = "https://github.com/H3kk3/Loomdraft"
+  downloadMac = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft.dmg"
+  downloadWin = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft.msi"
+  downloadLinux = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft.deb"
