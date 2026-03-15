@@ -37,4 +37,9 @@
 
   </div>
   <p class="download-meta">Alpha release coming soon &middot; Free &amp; open source &middot; Built with Tauri, React &amp; Rust</p>
+  <p class="download-note">
+    <strong>macOS note:</strong> If you see &ldquo;app is damaged&rdquo;, open Terminal and run something like:<br>
+    <code>xattr -r -d com.apple.quarantine /path/to/Loomdraft.app</code><br>
+    Adjust <code>/path/to/Loomdraft.app</code> to match where you installed Loomdraft; if you get a &ldquo;Permission denied&rdquo; error, re-run the command with <code>sudo</code>.
+  </p>
 </section>

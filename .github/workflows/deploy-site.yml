@@ -8,6 +8,10 @@ on:
       - 'docs/**'
   workflow_dispatch:
 
+env:
+  HUGO_VERSION: '0.147.1'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
   pages: write
@@ -23,10 +27,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Hugo
-        uses: peaceiris/actions-hugo@v3
+      - name: Install Hugo
+        uses: peaceiris/actions-hugo@v2
         with:
-          hugo-version: 'latest'
+          hugo-version: ${{ env.HUGO_VERSION }}
           extended: true
 
       - name: Build Hugo site

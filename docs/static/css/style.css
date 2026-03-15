@@ -437,6 +437,20 @@ a:hover { opacity: 0.85; }
   color: var(--text-dim);
 }
 
+.download-note {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 1.5rem;
+  line-height: 1.6;
+}
+
+.download-note code {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.2em 0.5em;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
 /* ============================================
    FOOTER
    ============================================ */
