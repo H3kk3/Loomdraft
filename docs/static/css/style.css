@@ -408,6 +408,12 @@ a:hover { opacity: 0.85; }
   background: rgba(123, 110, 246, 0.08);
 }
 
+.btn-download.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: default;
+}
+
 .btn-download-text {
   display: flex;
   flex-direction: column;
