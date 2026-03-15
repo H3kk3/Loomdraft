@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   release:
     permissions:
@@ -53,10 +56,23 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || '' }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Loomdraft ${{ github.ref_name }}'
-          releaseBody: 'Download Loomdraft for your platform below.'
+          releaseBody: |
+            Download Loomdraft for your platform below.
+
+            **macOS users:** If you see "app is damaged and can't be opened", open Terminal and run:
+            ```
+            xattr -r -d com.apple.quarantine /Applications/Loomdraft.app
+            ```
+            This is needed because the app is not yet code-signed with an Apple Developer certificate.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
