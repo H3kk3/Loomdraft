@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { DocType } from "../types";
+import type { DocTypeDefinition } from "../types";
 
 // ── NewProjectDialog ──────────────────────────────────────────────────────────
 
@@ -82,27 +82,10 @@ export function NewProjectDialog({ onConfirm, onCancel }: NewProjectDialogProps)
 
 interface AddNodeDialogProps {
   parentTitle: string;
-  allowedDocTypes: DocType[];
-  onConfirm: (title: string, docType: DocType) => void;
+  allowedDocTypes: DocTypeDefinition[];
+  onConfirm: (title: string, docType: string) => void;
   onCancel: () => void;
 }
-
-const DOC_TYPE_LABELS: Record<DocType, string> = {
-  part: "Part",
-  chapter: "Chapter",
-  scene: "Scene",
-  interlude: "Interlude",
-  snippet: "Snippet",
-  character: "Character",
-  location: "Location",
-  item: "Item",
-  organization: "Organization",
-  event: "Event",
-  lore: "Lore",
-  outline: "Outline",
-  research: "Research",
-  note: "Note",
-};
 
 export function AddNodeDialog({
   parentTitle,
@@ -111,12 +94,12 @@ export function AddNodeDialog({
   onCancel,
 }: AddNodeDialogProps) {
   const [title, setTitle] = useState("");
-  const [docType, setDocType] = useState<DocType>(allowedDocTypes[0] ?? "chapter");
+  const [docType, setDocType] = useState(allowedDocTypes[0]?.id ?? "chapter");
 
   // Keep docType in sync if allowedDocTypes changes from outside
-  const effectiveDocType = allowedDocTypes.includes(docType)
+  const effectiveDocType = allowedDocTypes.some((dt) => dt.id === docType)
     ? docType
-    : (allowedDocTypes[0] ?? docType);
+    : (allowedDocTypes[0]?.id ?? docType);
 
   return (
     <div className="dialog-backdrop">
@@ -139,10 +122,10 @@ export function AddNodeDialog({
         </label>
         <label>
           Type
-          <select value={effectiveDocType} onChange={(e) => setDocType(e.target.value as DocType)}>
-            {allowedDocTypes.map((type) => (
-              <option key={type} value={type}>
-                {DOC_TYPE_LABELS[type]}
+          <select value={effectiveDocType} onChange={(e) => setDocType(e.target.value)}>
+            {allowedDocTypes.map((dt) => (
+              <option key={dt.id} value={dt.id}>
+                {dt.label}
               </option>
             ))}
           </select>

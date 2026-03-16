@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { ProjectManifest, DocumentContent, DocType, ExportResult } from "./types";
+import type { ProjectManifest, DocumentContent, ExportResult } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { Editor } from "./components/Editor";
 import { NewProjectDialog, AddNodeDialog } from "./components/Dialogs";
@@ -10,10 +10,11 @@ import { ExportDialog, type ExportFormat } from "./components/ExportDialog";
 import { SearchPanel } from "./components/SearchPanel";
 import { QuickOpen } from "./components/QuickOpen";
 import { Toast, type ToastData } from "./components/Toast";
+import { DocTypeSettings } from "./components/DocTypeSettings";
 import { useTheme } from "./useTheme";
 import {
-  MANUSCRIPT_DOC_TYPES,
-  PLANNING_DOC_TYPES,
+  getManuscriptDocTypes,
+  getPlanningDocTypes,
   getAllowedChildDocTypes,
   type DocCategory,
 } from "./docTypes";
@@ -190,6 +191,7 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showQuickOpen, setShowQuickOpen] = useState(false);
+  const [showDocTypeSettings, setShowDocTypeSettings] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const selectedNodeIdRef = useRef<string | null>(null);
   const projectPathRef = useRef<string | null>(null);
@@ -355,19 +357,20 @@ export default function App() {
 
   // ── Node management ──────────────────────────────────────────────────────
 
-  const handleAddConfirm = async (title: string, docType: DocType) => {
-    if (!projectPath || !addingUnder) return;
+  const handleAddConfirm = async (title: string, docType: string) => {
+    if (!projectPath || !addingUnder || !manifest) return;
     const target = addingUnder;
     setAddingUnder(null);
 
-    const parentDocType = manifest?.nodes[target.parentId]?.doc_type;
+    const dt = manifest.doc_types;
+    const parentDocType = manifest.nodes[target.parentId]?.doc_type;
     const allowedDocTypes =
       target.category === "manuscript"
-        ? MANUSCRIPT_DOC_TYPES
+        ? getManuscriptDocTypes(dt)
         : target.category === "planning"
-          ? PLANNING_DOC_TYPES
-          : getAllowedChildDocTypes(parentDocType);
-    if (!allowedDocTypes.includes(docType)) {
+          ? getPlanningDocTypes(dt)
+          : getAllowedChildDocTypes(dt, parentDocType);
+    if (!allowedDocTypes.some((d) => d.id === docType)) {
       setError(`Cannot create a ${docType} document under this parent`);
       return;
     }
@@ -525,6 +528,7 @@ export default function App() {
           onExport={() => setShowExportDialog(true)}
           onClose={handleCloseProject}
           onSearch={() => setShowSearch(true)}
+          onDocTypeSettings={() => setShowDocTypeSettings(true)}
           theme={theme}
           onToggleTheme={toggleTheme}
           activeThemeId={activeThemeId}
@@ -612,10 +616,10 @@ export default function App() {
           }
           allowedDocTypes={
             addingUnder.category === "manuscript"
-              ? MANUSCRIPT_DOC_TYPES
+              ? getManuscriptDocTypes(manifest.doc_types)
               : addingUnder.category === "planning"
-                ? PLANNING_DOC_TYPES
-                : getAllowedChildDocTypes(manifest.nodes[addingUnder.parentId].doc_type)
+                ? getPlanningDocTypes(manifest.doc_types)
+                : getAllowedChildDocTypes(manifest.doc_types, manifest.nodes[addingUnder.parentId].doc_type)
           }
           onConfirm={handleAddConfirm}
           onCancel={() => setAddingUnder(null)}
@@ -642,6 +646,7 @@ export default function App() {
       {showSearch && projectPath && (
         <SearchPanel
           projectPath={projectPath}
+          docTypes={manifest?.doc_types ?? []}
           onSelectNode={handleSelectNode}
           onClose={() => setShowSearch(false)}
         />
@@ -652,6 +657,24 @@ export default function App() {
           manifest={manifest}
           onSelectNode={handleSelectNode}
           onClose={() => setShowQuickOpen(false)}
+        />
+      )}
+
+      {showDocTypeSettings && manifest && projectPath && (
+        <DocTypeSettings
+          projectPath={projectPath}
+          docTypes={manifest.doc_types}
+          nodeCounts={(() => {
+            const counts: Record<string, number> = {};
+            for (const node of Object.values(manifest.nodes)) {
+              if (node.doc_type) counts[node.doc_type] = (counts[node.doc_type] ?? 0) + 1;
+            }
+            return counts;
+          })()}
+          onUpdated={(docTypes) => {
+            setManifest((m) => (m ? { ...m, doc_types: docTypes } : m));
+          }}
+          onClose={() => setShowDocTypeSettings(false)}
         />
       )}
 

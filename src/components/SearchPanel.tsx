@@ -2,16 +2,17 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Search, X } from "lucide-react";
 import { DocTypeIcon } from "./Sidebar";
-import type { SearchResult } from "../types";
+import type { SearchResult, DocTypeDefinition } from "../types";
 import { SEARCH_DEBOUNCE_MS } from "../constants";
 
 interface SearchPanelProps {
   projectPath: string;
+  docTypes: DocTypeDefinition[];
   onSelectNode: (id: string) => void;
   onClose: () => void;
 }
 
-export function SearchPanel({ projectPath, onSelectNode, onClose }: SearchPanelProps) {
+export function SearchPanel({ projectPath, docTypes, onSelectNode, onClose }: SearchPanelProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -117,7 +118,7 @@ export function SearchPanel({ projectPath, onSelectNode, onClose }: SearchPanelP
               onMouseEnter={() => setActiveIdx(i)}
             >
               <span className="search-result-icon">
-                <DocTypeIcon docType={r.doc_type} />
+                <DocTypeIcon docType={r.doc_type} docTypes={docTypes} />
               </span>
               <div className="search-result-body">
                 <span className="search-result-title">{r.title}</span>

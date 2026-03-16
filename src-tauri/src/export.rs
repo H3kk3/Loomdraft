@@ -9,7 +9,7 @@ use std::path::Path;
 // Re-alias the image crate to avoid conflict with printpdf::image module.
 use ::image as img_crate;
 
-use crate::project::{is_manuscript_doc_type, parse_frontmatter, ProjectManifest};
+use crate::project::{is_manuscript_doc_type, parse_frontmatter, DocTypeDefinition, ProjectManifest};
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +18,7 @@ pub struct ManuscriptSegment {
     pub title: String,
     pub doc_type: String,
     pub body: String,
+    pub heading_level: u8,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -69,7 +70,7 @@ fn collect_dfs(
     };
 
     // Skip non-manuscript nodes entirely (planning section)
-    if !is_manuscript_doc_type(doc_type) {
+    if !is_manuscript_doc_type(&manifest.doc_types, doc_type) {
         return;
     }
 
@@ -87,10 +88,12 @@ fn collect_dfs(
                 None => raw,
             };
 
+            let hl = lookup_heading_level(&manifest.doc_types, doc_type);
             segments.push(ManuscriptSegment {
                 title,
                 doc_type: doc_type.to_string(),
                 body: body.trim().to_string(),
+                heading_level: hl,
             });
         }
         // If file missing, skip gracefully
@@ -119,19 +122,19 @@ fn strip_image_size_syntax(text: &str) -> String {
 
 // ── Heading level by doc type ────────────────────────────────────────────────
 
-fn heading_prefix(doc_type: &str) -> &'static str {
-    match doc_type {
-        "part" => "#",
-        "chapter" => "##",
-        _ => "###", // scene, interlude, snippet
-    }
+fn lookup_heading_level(doc_types: &[DocTypeDefinition], doc_type: &str) -> u8 {
+    doc_types
+        .iter()
+        .find(|dt| dt.id == doc_type)
+        .map(|dt| dt.heading_level)
+        .unwrap_or(3)
 }
 
-fn heading_level(doc_type: &str) -> u8 {
-    match doc_type {
-        "part" => 1,
-        "chapter" => 2,
-        _ => 3,
+fn heading_prefix_for_level(level: u8) -> &'static str {
+    match level {
+        1 => "#",
+        2 => "##",
+        _ => "###",
     }
 }
 
@@ -178,7 +181,7 @@ fn build_toc(segments: &[ManuscriptSegment]) -> Vec<TocEntry> {
         entries.push(TocEntry {
             title: seg.title.clone(),
             anchor,
-            level: heading_level(&seg.doc_type),
+            level: seg.heading_level,
         });
     }
     entries
@@ -204,7 +207,7 @@ pub fn render_markdown(segments: &[ManuscriptSegment]) -> String {
     // Build content sections
     let mut parts: Vec<String> = Vec::new();
     for (i, seg) in segments.iter().enumerate() {
-        let prefix = heading_prefix(&seg.doc_type);
+        let prefix = heading_prefix_for_level(seg.heading_level);
         let heading = format!("{} {}", prefix, seg.title);
 
         // Add anchor target (GitHub-compatible — headings auto-generate anchors,
@@ -232,7 +235,7 @@ pub fn render_html(segments: &[ManuscriptSegment], project_path: &Path) -> Strin
     // 1. Build markdown with anchor IDs on headings
     let mut parts: Vec<String> = Vec::new();
     for (i, seg) in segments.iter().enumerate() {
-        let prefix = heading_prefix(&seg.doc_type);
+        let prefix = heading_prefix_for_level(seg.heading_level);
         // Use explicit anchor + heading so comrak converts to proper HTML
         let anchor = format!("<a id=\"{}\"></a>", toc[i].anchor);
         let heading = format!("{}\n\n{} {}", anchor, prefix, seg.title);
@@ -903,17 +906,17 @@ pub fn render_pdf(
     w.new_page();
 
     for (i, seg) in segments.iter().enumerate() {
-        // Page break before parts and chapters (except the very first segment)
-        if i > 0 && (seg.doc_type == "part" || seg.doc_type == "chapter") {
+        // Page break before H1/H2 headings (except the very first segment)
+        if i > 0 && seg.heading_level <= 2 {
             w.new_page();
         } else if i > 0 {
             w.skip(LINE_H * 2.0);
         }
 
         // Section heading
-        let (size, font) = match seg.doc_type.as_str() {
-            "part" => (H1_SIZE, w.font_bold.clone()),
-            "chapter" => (H2_SIZE, w.font_bold.clone()),
+        let (size, font) = match seg.heading_level {
+            1 => (H1_SIZE, w.font_bold.clone()),
+            2 => (H2_SIZE, w.font_bold.clone()),
             _ => (H3_SIZE, w.font_bold.clone()),
         };
         w.ensure_space(12.0);
@@ -1000,26 +1003,21 @@ mod tests {
         assert_eq!(strip_image_size_syntax(input), input);
     }
 
-    // ── heading_prefix ───────────────────────────────────────────────────
+    // ── heading_prefix_for_level ────────────────────────────────────────
 
     #[test]
-    fn heading_prefix_part() {
-        assert_eq!(heading_prefix("part"), "#");
+    fn heading_prefix_level_1() {
+        assert_eq!(heading_prefix_for_level(1), "#");
     }
 
     #[test]
-    fn heading_prefix_chapter() {
-        assert_eq!(heading_prefix("chapter"), "##");
+    fn heading_prefix_level_2() {
+        assert_eq!(heading_prefix_for_level(2), "##");
     }
 
     #[test]
-    fn heading_prefix_scene() {
-        assert_eq!(heading_prefix("scene"), "###");
-    }
-
-    #[test]
-    fn heading_prefix_interlude() {
-        assert_eq!(heading_prefix("interlude"), "###");
+    fn heading_prefix_level_3() {
+        assert_eq!(heading_prefix_for_level(3), "###");
     }
 
     // ── html_escape ──────────────────────────────────────────────────────
@@ -1118,11 +1116,13 @@ mod tests {
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: "Opening paragraph.".to_string(),
+                heading_level: 1,
             },
             ManuscriptSegment {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: "Chapter body with [[Aiko]].".to_string(),
+                heading_level: 2,
             },
         ];
         let md = render_markdown(&segments);
@@ -1139,6 +1139,7 @@ mod tests {
             title: "Empty".to_string(),
             doc_type: "scene".to_string(),
             body: String::new(),
+            heading_level: 3,
         }];
         let md = render_markdown(&segments);
         assert!(md.contains("### Empty"));
@@ -1159,16 +1160,19 @@ mod tests {
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: String::new(),
+                heading_level: 1,
             },
             ManuscriptSegment {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
+                heading_level: 2,
             },
             ManuscriptSegment {
                 title: "Opening".to_string(),
                 doc_type: "scene".to_string(),
                 body: String::new(),
+                heading_level: 3,
             },
         ];
         let toc = build_toc(&segments);
@@ -1187,11 +1191,13 @@ mod tests {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
+                heading_level: 2,
             },
             ManuscriptSegment {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
+                heading_level: 2,
             },
         ];
         let toc = build_toc(&segments);
@@ -1206,11 +1212,13 @@ mod tests {
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: "text".to_string(),
+                heading_level: 1,
             },
             ManuscriptSegment {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: "text".to_string(),
+                heading_level: 2,
             },
         ];
         let md = render_markdown(&segments);
@@ -1226,11 +1234,13 @@ mod tests {
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: String::new(),
+                heading_level: 1,
             },
             ManuscriptSegment {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
+                heading_level: 2,
             },
         ]);
         let html = build_html_toc(&toc);

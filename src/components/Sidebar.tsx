@@ -18,11 +18,33 @@ import {
   Download,
   Palette,
   Search,
+  Crown,
+  Shield,
+  Globe,
+  Heart,
+  Star,
+  Flag,
+  Feather,
+  Flame,
+  Lightbulb,
+  Music,
+  Puzzle,
+  Skull,
+  Target,
+  Wand,
+  Sparkles,
+  Gem,
+  Bookmark,
+  Compass,
+  Eye,
+  Pen,
+  Settings,
+  type LucideIcon,
 } from "lucide-react";
 import type { Theme } from "../useTheme";
 import type { ThemeMetadata, FontInfo, FontPreference } from "../themes/themeTypes";
 import { ThemePicker } from "./ThemePicker";
-import type { ProjectManifest } from "../types";
+import type { ProjectManifest, DocTypeDefinition } from "../types";
 import type { DocCategory } from "../docTypes";
 import { DRAG_THRESHOLD_PX } from "../constants";
 import { TreeNode, type DropTarget, type DropPos } from "./TreeNode";
@@ -47,44 +69,34 @@ function findParent(manifest: ProjectManifest, nodeId: string): string | null {
   return null;
 }
 
+// ── Icon map ──────────────────────────────────────────────────────────────────
+
+export const ICON_MAP: Record<string, LucideIcon> = {
+  Library, BookOpen, Film, Pause, Scissors, User, MapPin, Sword, Building2,
+  CalendarDays, ScrollText, ListTree, Microscope, StickyNote, FileText,
+  Crown, Shield, Globe, Heart, Star, Flag, Feather, Flame, Lightbulb,
+  Music, Puzzle, Skull, Target, Wand, Sparkles, Gem, Bookmark, Compass,
+  Eye, Pen,
+};
+
 // ── DocTypeIcon ───────────────────────────────────────────────────────────────
 
-export const DocTypeIcon = memo(function DocTypeIcon({ docType }: { docType?: string }) {
+export const DocTypeIcon = memo(function DocTypeIcon({
+  docType,
+  docTypes,
+}: {
+  docType?: string;
+  docTypes?: DocTypeDefinition[];
+}) {
   const props = { size: 14, strokeWidth: 1.75 };
-  switch (docType) {
-    case "part":
-      return <Library {...props} />;
-    case "chapter":
-      return <BookOpen {...props} />;
-    case "scene":
-      return <Film {...props} />;
-    case "interlude":
-      return <Pause {...props} />;
-    case "snippet":
-      return <Scissors {...props} />;
-    case "character":
-      return <User {...props} />;
-    case "location":
-    case "place":
-      return <MapPin {...props} />;
-    case "item":
-      return <Sword {...props} />;
-    case "organization":
-      return <Building2 {...props} />;
-    case "event":
-      return <CalendarDays {...props} />;
-    case "lore":
-      return <ScrollText {...props} />;
-    case "outline":
-      return <ListTree {...props} />;
-    case "research":
-      return <Microscope {...props} />;
-    case "note":
-    case "manuscript":
-      return <StickyNote {...props} />;
-    default:
-      return <FileText {...props} />;
+  if (docType && docTypes) {
+    const def = docTypes.find((dt) => dt.id === docType);
+    if (def) {
+      const Icon = ICON_MAP[def.icon];
+      if (Icon) return <Icon {...props} />;
+    }
   }
+  return <FileText {...props} />;
 });
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -100,6 +112,7 @@ export interface SidebarProps {
   onExport: () => void;
   onClose: () => void;
   onSearch: () => void;
+  onDocTypeSettings: () => void;
   theme: Theme;
   onToggleTheme: () => void;
   // Extended theme system
@@ -126,6 +139,7 @@ export function Sidebar({
   onExport,
   onClose,
   onSearch,
+  onDocTypeSettings,
   theme: _theme,
   onToggleTheme: _onToggleTheme,
   activeThemeId,
@@ -326,6 +340,9 @@ export function Sidebar({
             onClick={() => setShowThemePicker((v) => !v)}
           >
             <Palette size={15} strokeWidth={1.75} />
+          </button>
+          <button className="icon-btn" title="Document types" onClick={onDocTypeSettings}>
+            <Settings size={15} strokeWidth={1.75} />
           </button>
           <button className="icon-btn" title="Export manuscript" onClick={onExport}>
             <Download size={15} strokeWidth={1.75} />

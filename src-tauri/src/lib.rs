@@ -8,7 +8,7 @@ mod theme;
 
 use db::SearchResult;
 use error::LoomdraftError;
-use project::{BackupEntry, DocumentContent, ProjectManifest};
+use project::{BackupEntry, DocTypeDefinition, DocumentContent, ProjectManifest};
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -173,6 +173,32 @@ fn reindex_project(project_path: String) -> CmdResult<usize> {
     Ok(db::reindex(&conn, &path, &manifest)?)
 }
 
+// ── Doc type commands ─────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn add_doc_type(
+    project_path: String,
+    doc_type: DocTypeDefinition,
+) -> CmdResult<Vec<DocTypeDefinition>> {
+    Ok(project::add_doc_type(&PathBuf::from(&project_path), doc_type)?)
+}
+
+#[tauri::command]
+fn update_doc_type(
+    project_path: String,
+    doc_type: DocTypeDefinition,
+) -> CmdResult<Vec<DocTypeDefinition>> {
+    Ok(project::update_doc_type(&PathBuf::from(&project_path), doc_type)?)
+}
+
+#[tauri::command]
+fn remove_doc_type(
+    project_path: String,
+    type_id: String,
+) -> CmdResult<Vec<DocTypeDefinition>> {
+    Ok(project::remove_doc_type(&PathBuf::from(&project_path), &type_id)?)
+}
+
 // ── Word count commands ──────────────────────────────────────────────────────
 
 #[derive(serde::Serialize)]
@@ -194,7 +220,7 @@ fn get_manuscript_word_count(project_path: String) -> CmdResult<WordCountResult>
             Some(dt) => dt.as_str(),
             None => continue,
         };
-        if !project::is_manuscript_doc_type(doc_type) {
+        if !project::is_manuscript_doc_type(&manifest.doc_types, doc_type) {
             continue;
         }
         let file_rel = match &node.file {
@@ -538,6 +564,9 @@ pub fn run() {
             get_backlinks,
             reindex_project,
             get_manuscript_word_count,
+            add_doc_type,
+            update_doc_type,
+            remove_doc_type,
             import_image,
             read_image_base64,
             export_manuscript,

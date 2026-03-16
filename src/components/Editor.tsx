@@ -360,7 +360,7 @@ export function Editor({
         onImageClickFacet.of((img: ActiveImage) => setActiveImage(img)),
       ),
     });
-  }, [viewRef]);
+  }, [viewRef, doc.id]);
 
   // ── Typewriter mode toggle ──────────────────────────────────────────────
   useEffect(() => {
@@ -447,7 +447,7 @@ export function Editor({
     view.dispatch({
       effects: linkHoverCompartment.current.reconfigure(onLinkHoverFacet.of(handleLinkHover)),
     });
-  }, [handleLinkHover, viewRef]);
+  }, [handleLinkHover, viewRef, doc.id]);
 
   // Fetch preview content when hovered link changes
   useEffect(() => {

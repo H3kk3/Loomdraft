@@ -129,10 +129,10 @@ export const TreeNode = memo(function TreeNode({
     .join(" ");
 
   const manuscriptChildren = isRoot
-    ? node.children.filter((childId) => isManuscriptDocType(manifest.nodes[childId]?.doc_type))
+    ? node.children.filter((childId) => isManuscriptDocType(manifest.doc_types, manifest.nodes[childId]?.doc_type))
     : [];
   const planningChildren = isRoot
-    ? node.children.filter((childId) => !isManuscriptDocType(manifest.nodes[childId]?.doc_type))
+    ? node.children.filter((childId) => !isManuscriptDocType(manifest.doc_types, manifest.nodes[childId]?.doc_type))
     : [];
 
   const childProps = {
@@ -192,7 +192,7 @@ export const TreeNode = memo(function TreeNode({
       >
         <span className="tree-icon">
           {hasFile ? (
-            <DocTypeIcon docType={node.doc_type} />
+            <DocTypeIcon docType={node.doc_type} docTypes={manifest.doc_types} />
           ) : (
             <Folder size={14} strokeWidth={1.75} />
           )}
