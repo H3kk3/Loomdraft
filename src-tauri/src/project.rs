@@ -1,4 +1,5 @@
 use chrono::Utc;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -198,8 +199,11 @@ pub fn create_backup(project_path: &Path, node_id: &str) -> Result<(), String> {
 
     let timestamp = Utc::now().format("%Y%m%dT%H%M%S%.3f").to_string();
     let backup_file = dir.join(format!("{timestamp}.md"));
-    fs::copy(&file_path, &backup_file)
+    let tmp_file = dir.join(format!("{timestamp}.md.tmp"));
+    fs::copy(&file_path, &tmp_file)
         .map_err(|e| format!("Cannot create backup: {e}"))?;
+    fs::rename(&tmp_file, &backup_file)
+        .map_err(|e| format!("Cannot finalize backup: {e}"))?;
 
     // Prune old backups — keep only the newest MAX_BACKUPS_PER_NODE
     prune_backups(&dir)?;
@@ -387,7 +391,7 @@ pub fn save_document(
 
     fm.modified = Some(Utc::now().to_rfc3339());
 
-    let raw = write_frontmatter(&fm, content);
+    let raw = write_frontmatter(&fm, content)?;
     let tmp_path = file_path.with_extension("md.tmp");
     fs::write(&tmp_path, &raw).map_err(|e| format!("Cannot write temp file: {e}"))?;
     fs::rename(&tmp_path, &file_path).map_err(|e| format!("Cannot finalize file: {e}"))?;
@@ -496,7 +500,7 @@ pub fn add_node(
         created: Some(Utc::now().to_rfc3339()),
         modified: None,
     };
-    let raw = write_frontmatter(&fm, "");
+    let raw = write_frontmatter(&fm, "")?;
     fs::write(project_path.join(&file_rel), raw)
         .map_err(|e| format!("Cannot create document file: {e}"))?;
 
@@ -688,7 +692,7 @@ pub fn rename_node(
             if let Some((mut fm, body)) = parse_frontmatter(&raw) {
                 fm.title = new_title.to_string();
                 fm.modified = Some(Utc::now().to_rfc3339());
-                fs::write(&file_path, write_frontmatter(&fm, &body))
+                fs::write(&file_path, write_frontmatter(&fm, &body)?)
                     .map_err(|e| e.to_string())?;
             }
         }
@@ -776,26 +780,10 @@ pub fn remove_doc_type(
 
 /// Returns all `[[target]]` link targets found in `content`.
 pub fn extract_wiki_links(content: &str) -> Vec<String> {
-    let mut links = Vec::new();
-    let bytes = content.as_bytes();
-    let mut i = 0;
-    while i + 1 < bytes.len() {
-        if bytes[i] == b'[' && bytes[i + 1] == b'[' {
-            i += 2;
-            let start = i;
-            while i + 1 < bytes.len() && !(bytes[i] == b']' && bytes[i + 1] == b']') {
-                i += 1;
-            }
-            if i + 1 < bytes.len() {
-                // Strip namespace prefix: [[char:aiko]] → "aiko" kept as-is (we store full ref)
-                links.push(content[start..i].to_string());
-                i += 2;
-                continue;
-            }
-        }
-        i += 1;
-    }
-    links
+    let re = Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
+    re.captures_iter(content)
+        .map(|cap| cap[1].to_string())
+        .collect()
 }
 
 // ── Frontmatter helpers ───────────────────────────────────────────────────────
@@ -826,10 +814,10 @@ pub fn parse_frontmatter(content: &str) -> Option<(DocumentFrontmatter, String)>
     Some((fm, body))
 }
 
-pub fn write_frontmatter(fm: &DocumentFrontmatter, body: &str) -> String {
-    // serde_yaml 0.9 to_string() outputs plain YAML with a trailing newline
-    let yaml = serde_yaml::to_string(fm).unwrap_or_default();
-    format!("---\n{}---\n\n{}", yaml, body)
+pub fn write_frontmatter(fm: &DocumentFrontmatter, body: &str) -> Result<String, String> {
+    let yaml = serde_yaml::to_string(fm)
+        .map_err(|e| format!("Cannot serialize frontmatter: {e}"))?;
+    Ok(format!("---\n{}---\n\n{}", yaml, body))
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -968,7 +956,7 @@ mod tests {
             created: None,
             modified: None,
         };
-        let raw = write_frontmatter(&fm, "Body content");
+        let raw = write_frontmatter(&fm, "Body content").expect("should serialize");
         let (parsed, body) = parse_frontmatter(&raw).expect("should roundtrip");
         assert_eq!(parsed.id, "node-42");
         assert_eq!(parsed.doc_type, "scene");
@@ -1005,6 +993,18 @@ mod tests {
     fn extract_wiki_links_with_namespace() {
         let links = extract_wiki_links("See [[char:Aiko]] for details");
         assert_eq!(links, vec!["char:Aiko"]);
+    }
+
+    #[test]
+    fn extract_wiki_links_with_emoji() {
+        let links = extract_wiki_links("Hello 😀 [[target]] and 日本語 [[第二章]] end");
+        assert_eq!(links, vec!["target", "第二章"]);
+    }
+
+    #[test]
+    fn extract_wiki_links_emoji_adjacent() {
+        let links = extract_wiki_links("🎉[[link]]🎊");
+        assert_eq!(links, vec!["link"]);
     }
 
     // ── title_to_slug ────────────────────────────────────────────────────
@@ -1187,7 +1187,7 @@ mod tests {
             created: Some("2026-01-01T00:00:00Z".to_string()),
             modified: None,
         };
-        let raw = write_frontmatter(&fm, "Original content");
+        let raw = write_frontmatter(&fm, "Original content").unwrap();
         fs::write(project.join("manuscript/chap--one.md"), &raw).unwrap();
 
         // Write a manifest
@@ -1292,7 +1292,7 @@ mod tests {
             created: Some("2026-01-01T00:00:00Z".to_string()),
             modified: Some("2026-01-02T00:00:00Z".to_string()),
         };
-        let new_raw = write_frontmatter(&fm, "Modified content");
+        let new_raw = write_frontmatter(&fm, "Modified content").unwrap();
         fs::write(project.join("manuscript/chap--one.md"), &new_raw).unwrap();
 
         // Restore the original backup

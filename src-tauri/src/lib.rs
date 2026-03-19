@@ -72,7 +72,7 @@ fn save_document(
     // Update index (best-effort — don't fail the save)
     if let Ok(conn) = db::open_db(&db_path(&project_path)) {
         let links = project::extract_wiki_links(&content);
-        let _ = db::index_document(
+        if let Err(e) = db::index_document(
             &conn,
             &doc.id,
             &doc.doc_type,
@@ -80,8 +80,12 @@ fn save_document(
             &doc.file,
             &content,
             None,
-        );
-        let _ = db::update_links(&conn, &doc.id, &links);
+        ) {
+            eprintln!("[warn] index update failed for {}: {e}", doc.id);
+        }
+        if let Err(e) = db::update_links(&conn, &doc.id, &links) {
+            eprintln!("[warn] link index update failed for {}: {e}", doc.id);
+        }
     }
 
     Ok(doc)
@@ -103,9 +107,11 @@ fn add_node(
     if let Ok(conn) = db::open_db(&db_path(&project_path)) {
         if let Some(node) = manifest.nodes.get(&node_id) {
             if let Some(file) = &node.file {
-                let _ = db::index_document(
+                if let Err(e) = db::index_document(
                     &conn, &node_id, &doc_type, &title, file, "", None,
-                );
+                ) {
+                    eprintln!("[warn] index failed for new node {node_id}: {e}");
+                }
             }
         }
     }
@@ -120,7 +126,9 @@ fn delete_node(project_path: String, node_id: String) -> CmdResult<ProjectManife
 
     if let Ok(conn) = db::open_db(&db_path(&project_path)) {
         for id in &deleted_ids {
-            let _ = db::remove_document(&conn, id);
+            if let Err(e) = db::remove_document(&conn, id) {
+                eprintln!("[warn] index removal failed for {id}: {e}");
+            }
         }
     }
 
@@ -406,6 +414,16 @@ fn export_manuscript(
         return Err(LoomdraftError::Export(
             "No manuscript documents to export".into(),
         ));
+    }
+
+    // Validate output directory exists
+    if let Some(parent) = std::path::Path::new(&output_path).parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            return Err(LoomdraftError::Export(format!(
+                "Output directory does not exist: {}",
+                parent.display()
+            )));
+        }
     }
 
     // Get manuscript title for PDF

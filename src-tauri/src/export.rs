@@ -5,6 +5,23 @@ use printpdf::*;
 use regex::Regex;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
+
+// ── Cached regexes ──────────────────────────────────────────────────────────
+
+static RE_WIKI_LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[\[([^\]]+)\]\]").unwrap());
+static RE_IMG_SIZE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!\[([^\]|]*)\|\d+x\d+\]").unwrap());
+static RE_IMG_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"<img\s+([^>]*?)src="(assets/images/[^"]+)"([^>]*?)>"#).unwrap());
+static RE_IMG_MD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!\[[^\]]*?\]\(([^)]+)\)").unwrap());
+static RE_IMG_STRIP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!\[[^\]]*\]\([^)]*\)").unwrap());
+static RE_LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap());
+static RE_BOLD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\*\*(.+?)\*\*").unwrap());
+static RE_BOLD2: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"__(.+?)__").unwrap());
+static RE_ITALIC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\*(.+?)\*").unwrap());
+static RE_ITALIC2: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|\s)_(.+?)_(?:\s|$)").unwrap());
+static RE_CODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`([^`]+)`").unwrap());
+static RE_HEADING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^#{1,6}\s+").unwrap());
+static RE_HR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^[-*_]{3,}\s*$").unwrap());
 
 // Re-alias the image crate to avoid conflict with printpdf::image module.
 use ::image as img_crate;
@@ -109,15 +126,13 @@ fn collect_dfs(
 
 /// Strip [[wiki-links]] → plain text
 fn strip_wiki_links(text: &str) -> String {
-    let re = Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
-    re.replace_all(text, "$1").to_string()
+    RE_WIKI_LINK.replace_all(text, "$1").to_string()
 }
 
 /// Strip |WxH from image alt text so comrak sees standard markdown images.
 /// `![alt|400x300](path)` → `![alt](path)`
 fn strip_image_size_syntax(text: &str) -> String {
-    let re = Regex::new(r"!\[([^\]|]*)\|\d+x\d+\]").unwrap();
-    re.replace_all(text, "![$1]").to_string()
+    RE_IMG_SIZE.replace_all(text, "![$1]").to_string()
 }
 
 // ── Heading level by doc type ────────────────────────────────────────────────
@@ -511,9 +526,7 @@ fn build_html_toc(entries: &[TocEntry]) -> String {
 // ── Image embedding ──────────────────────────────────────────────────────────
 
 fn embed_images(html: &str, project_path: &Path) -> String {
-    let re = Regex::new(r#"<img\s+([^>]*?)src="(assets/images/[^"]+)"([^>]*?)>"#).unwrap();
-
-    re.replace_all(html, |caps: &regex::Captures| {
+    RE_IMG_TAG.replace_all(html, |caps: &regex::Captures| {
         let before = &caps[1];
         let rel_path = &caps[2];
         let after = &caps[3];
@@ -777,11 +790,10 @@ enum ContentBlock {
 /// Split a markdown body into an ordered sequence of text runs and image
 /// references.  Images are detected by `![alt|WxH](path)` or `![alt](path)`.
 fn parse_content_blocks(body: &str) -> Vec<ContentBlock> {
-    let img_re = Regex::new(r"!\[[^\]]*?\]\(([^)]+)\)").unwrap();
     let mut blocks = Vec::new();
     let mut last_end = 0;
 
-    for cap in img_re.captures_iter(body) {
+    for cap in RE_IMG_MD.captures_iter(body) {
         let whole = cap.get(0).unwrap();
 
         // Text before this image
@@ -810,44 +822,25 @@ fn strip_markdown_formatting(text: &str) -> String {
     let mut s = text.to_string();
 
     // Images: ![alt](src) → remove entirely
-    let img_re = Regex::new(r"!\[[^\]]*\]\([^)]*\)").unwrap();
-    s = img_re.replace_all(&s, "").to_string();
-
+    s = RE_IMG_STRIP.replace_all(&s, "").to_string();
     // Links: [text](url) → text
-    let link_re = Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap();
-    s = link_re.replace_all(&s, "$1").to_string();
-
+    s = RE_LINK.replace_all(&s, "$1").to_string();
     // Bold **text** and __text__
-    let bold_re = Regex::new(r"\*\*(.+?)\*\*").unwrap();
-    s = bold_re.replace_all(&s, "$1").to_string();
-    let bold2_re = Regex::new(r"__(.+?)__").unwrap();
-    s = bold2_re.replace_all(&s, "$1").to_string();
-
+    s = RE_BOLD.replace_all(&s, "$1").to_string();
+    s = RE_BOLD2.replace_all(&s, "$1").to_string();
     // Italic *text* and _text_
-    let italic_re = Regex::new(r"\*(.+?)\*").unwrap();
-    s = italic_re.replace_all(&s, "$1").to_string();
-    let italic2_re = Regex::new(r"(?:^|\s)_(.+?)_(?:\s|$)").unwrap();
-    s = italic2_re.replace_all(&s, " $1 ").to_string();
-
+    s = RE_ITALIC.replace_all(&s, "$1").to_string();
+    s = RE_ITALIC2.replace_all(&s, " $1 ").to_string();
     // Inline code `text`
-    let code_re = Regex::new(r"`([^`]+)`").unwrap();
-    s = code_re.replace_all(&s, "$1").to_string();
-
+    s = RE_CODE.replace_all(&s, "$1").to_string();
     // Heading markers
-    let heading_re = Regex::new(r"(?m)^#{1,6}\s+").unwrap();
-    s = heading_re.replace_all(&s, "").to_string();
-
+    s = RE_HEADING.replace_all(&s, "").to_string();
     // Horizontal rules
-    let hr_re = Regex::new(r"(?m)^[-*_]{3,}\s*$").unwrap();
-    s = hr_re.replace_all(&s, "").to_string();
-
+    s = RE_HR.replace_all(&s, "").to_string();
     // Wiki-links [[target]] → target
-    let wiki_re = Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
-    s = wiki_re.replace_all(&s, "$1").to_string();
-
+    s = RE_WIKI_LINK.replace_all(&s, "$1").to_string();
     // Image size syntax (already handled by image strip, but just in case)
-    let img_size_re = Regex::new(r"!\[([^\]|]*)\|\d+x\d+\]").unwrap();
-    s = img_size_re.replace_all(&s, "![$1]").to_string();
+    s = RE_IMG_SIZE.replace_all(&s, "![$1]").to_string();
 
     s
 }

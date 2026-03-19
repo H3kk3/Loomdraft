@@ -331,7 +331,7 @@ export function Editor({
     view.dispatch({
       effects: wrapCompartment.current.reconfigure(softWrap ? EditorView.lineWrapping : []),
     });
-  }, [softWrap, viewRef]);
+  }, [softWrap, viewRef, doc.id]);
 
   // ── Reconfigure facets when props change ─────────────────────────────────
   useEffect(() => {
@@ -371,7 +371,7 @@ export function Editor({
         typewriterMode ? typewriterExtension() : [],
       ),
     });
-  }, [typewriterMode, viewRef]);
+  }, [typewriterMode, viewRef, doc.id]);
 
   // ── Focus mode toggle ────────────────────────────────────────────────────
   useEffect(() => {
@@ -380,7 +380,7 @@ export function Editor({
     view.dispatch({
       effects: focusModeCompartment.current.reconfigure(focusMode ? focusModeExtension() : []),
     });
-  }, [focusMode, viewRef]);
+  }, [focusMode, viewRef, doc.id]);
 
   // ── Spell-check toggle ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -394,7 +394,7 @@ export function Editor({
     } catch {
       /* noop */
     }
-  }, [spellCheck, viewRef]);
+  }, [spellCheck, viewRef, doc.id]);
 
   // ── Manuscript mode toggle ──────────────────────────────────────────────────
   useEffect(() => {
@@ -408,7 +408,7 @@ export function Editor({
     } catch {
       /* noop */
     }
-  }, [manuscriptMode, viewRef]);
+  }, [manuscriptMode, viewRef, doc.id]);
 
   // ── Syntax highlighting (reconfigure on theme change) ──────────────────────
   useEffect(() => {
@@ -419,7 +419,7 @@ export function Editor({
         createSyntaxHighlighting(activeTheme.syntax, activeTheme.colors),
       ),
     });
-  }, [activeTheme, viewRef]);
+  }, [activeTheme, viewRef, doc.id]);
 
   // ── Link hover preview ─────────────────────────────────────────────────────
   const handleLinkHover = useCallback((link: HoveredLink | null) => {
@@ -480,6 +480,10 @@ export function Editor({
 
   // Reset link hover on doc switch
   useEffect(() => {
+    if (linkDismissTimer.current !== null) {
+      window.clearTimeout(linkDismissTimer.current);
+      linkDismissTimer.current = null;
+    }
     setHoveredLink(null);
     setLinkPreview(null);
   }, [doc.id]);

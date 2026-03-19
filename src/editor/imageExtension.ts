@@ -103,6 +103,7 @@ class ImageWidget extends WidgetType {
   eq(other: ImageWidget): boolean {
     return (
       this.relativePath === other.relativePath &&
+      this.alt === other.alt &&
       this.width === other.width &&
       this.height === other.height &&
       this.dataUrl === other.dataUrl
