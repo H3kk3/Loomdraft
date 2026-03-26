@@ -43,11 +43,14 @@ export function ImagePreviewCard({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Positioning: below thumbnail if space, above otherwise
+  // Positioning: clamp to viewport bounds
   const cardWidth = 500;
-  const left = Math.min(image.rect.left, window.innerWidth - cardWidth - 16);
+  const cardHeight = 340;
+  const left = Math.max(8, Math.min(image.rect.left, window.innerWidth - cardWidth - 16));
   const belowSpace = window.innerHeight - image.rect.bottom;
-  const top = belowSpace > 340 ? image.rect.bottom + 6 : Math.max(8, image.rect.top - 340);
+  const top = belowSpace > cardHeight
+    ? image.rect.bottom + 6
+    : Math.max(8, Math.min(image.rect.top - cardHeight, window.innerHeight - cardHeight - 8));
 
   const handleNaturalSize = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;

@@ -98,6 +98,24 @@
   font-size: 13px;
   max-width: 80%;
   text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.error-dismiss {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  opacity: 0.7;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.error-dismiss:hover {
+  opacity: 1;
 }
 
 .loading {
@@ -215,7 +233,13 @@
   padding: 0 8px 4px;
 }
 
+.recent-item-row {
+  display: flex;
+  gap: 0;
+}
+
 .recent-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -224,11 +248,12 @@
   padding: 8px 10px;
   background: var(--bg-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius) 0 0 var(--radius);
   color: var(--text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+  min-width: 0;
   transition:
     border-color 0.15s,
     background 0.15s;
@@ -237,6 +262,29 @@
 .recent-item:hover {
   border-color: var(--accent);
   background: var(--bg-3);
+}
+
+.recent-remove {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--text-dim);
+  font-size: 16px;
+  padding: 0 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.recent-item-row:hover .recent-remove {
+  opacity: 1;
+}
+
+.recent-remove:hover {
+  color: var(--danger);
 }
 
 .recent-path {

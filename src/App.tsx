@@ -9,8 +9,9 @@ import { NewProjectDialog, AddNodeDialog } from "./components/Dialogs";
 import { ExportDialog, type ExportFormat } from "./components/ExportDialog";
 import { SearchPanel } from "./components/SearchPanel";
 import { QuickOpen } from "./components/QuickOpen";
-import { Toast, type ToastData } from "./components/Toast";
+import { ToastStack, createToast, type ToastData } from "./components/Toast";
 import { DocTypeSettings } from "./components/DocTypeSettings";
+import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { useTheme } from "./useTheme";
 import {
   getManuscriptDocTypes,
@@ -66,12 +67,24 @@ function addRecentProject(path: string): void {
   localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, MAX_RECENT_PROJECTS)));
 }
 
+function removeRecentProject(path: string): void {
+  const recent = getRecentProjects().filter((p) => p !== path);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+}
+
 // ── Welcome screen ────────────────────────────────────────────────────────────
+
+function truncatePath(path: string, segments = 3): string {
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length <= segments) return path;
+  return "…/" + parts.slice(-segments).join("/");
+}
 
 function Welcome({
   onNew,
   onOpen,
   onOpenRecent,
+  onRemoveRecent,
   error,
   activeThemeId,
   builtinThemes,
@@ -80,6 +93,7 @@ function Welcome({
   onNew: () => void;
   onOpen: () => void;
   onOpenRecent: (path: string) => void;
+  onRemoveRecent: (path: string) => void;
   error: string | null;
   activeThemeId: string;
   builtinThemes: import("./themes/themeTypes").ThemeMetadata[];
@@ -141,19 +155,52 @@ function Welcome({
         <div className="recent-projects">
           <div className="recent-label">Recent</div>
           {recent.map((path) => (
-            <button
-              key={path}
-              className="recent-item"
-              onClick={() => onOpenRecent(path)}
-              title={path}
-            >
-              {path.split("/").pop() || path}
-              <span className="recent-path">{path}</span>
-            </button>
+            <div key={path} className="recent-item-row">
+              <button
+                className="recent-item"
+                onClick={() => onOpenRecent(path)}
+                title={path}
+              >
+                {path.split("/").pop() || path}
+                <span className="recent-path">{truncatePath(path)}</span>
+              </button>
+              <button
+                className="recent-remove"
+                title="Remove from recent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveRecent(path);
+                }}
+              >
+                &times;
+              </button>
+            </div>
           ))}
         </div>
       )}
       {error && <p className="error-msg">{error}</p>}
+    </div>
+  );
+}
+
+// ── Export progress ──────────────────────────────────────────────────────────
+
+function ExportProgress() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <div className="dialog-backdrop">
+      <div className="export-loading">
+        <div className="export-spinner" />
+        <span>Exporting manuscript…</span>
+        {elapsed >= 2 && (
+          <span className="export-elapsed">{elapsed}s</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -192,12 +239,18 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [showQuickOpen, setShowQuickOpen] = useState(false);
   const [showDocTypeSettings, setShowDocTypeSettings] = useState(false);
-  const [toast, setToast] = useState<ToastData | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [, setRecentKey] = useState(0);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
   const selectedNodeIdRef = useRef<string | null>(null);
   const projectPathRef = useRef<string | null>(null);
 
   const showToast = useCallback((message: string, type: ToastData["type"] = "success") => {
-    setToast({ message, type });
+    setToasts((prev) => [...prev, createToast(message, type)]);
+  }, []);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   // ── Theme/font operations with toast notifications ──────────────────────
@@ -240,6 +293,10 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === "p") {
         e.preventDefault();
         if (projectPath && manifest) setShowQuickOpen((v) => !v);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+        e.preventDefault();
+        setShowShortcuts((v) => !v);
       }
     };
     window.addEventListener("keydown", handler);
@@ -371,7 +428,7 @@ export default function App() {
           ? getPlanningDocTypes(dt)
           : getAllowedChildDocTypes(dt, parentDocType);
     if (!allowedDocTypes.some((d) => d.id === docType)) {
-      setError(`Cannot create a ${docType} document under this parent`);
+      showToast(`Cannot create a ${docType} document under this parent`, "error");
       return;
     }
 
@@ -431,7 +488,7 @@ export default function App() {
       });
       setManifest(refreshed);
     } catch (e) {
-      setError(`Move failed: ${String(e)}`);
+      showToast(`Move failed: ${String(e)}`, "error");
     }
   };
 
@@ -499,6 +556,10 @@ export default function App() {
           }}
           onOpen={handleOpenProject}
           onOpenRecent={openProjectByPath}
+          onRemoveRecent={(path) => {
+            removeRecentProject(path);
+            setRecentKey((k) => k + 1);
+          }}
           error={error}
           activeThemeId={activeThemeId}
           builtinThemes={builtinThemes}
@@ -569,13 +630,15 @@ export default function App() {
             projectPath={projectPath ?? undefined}
             onDistractionFreeChange={setEditorDistractionFree}
             activeTheme={activeTheme}
+            onToast={showToast}
+            breadcrumbTitle={document.title}
           />
         ) : (
           <div className="empty-state">
             <div className="empty-state-content">
               <p className="empty-state-title">No document selected</p>
               <p className="empty-state-subtitle">
-                Select a document from the sidebar, or add one with +
+                Select a document from the sidebar, or click + next to Manuscript to add your first chapter
               </p>
               <div className="empty-state-shortcuts">
                 <div className="shortcut-row">
@@ -598,11 +661,22 @@ export default function App() {
                   <kbd>Ctrl+Alt+F</kbd>
                   <span>Focus mode</span>
                 </div>
+                <div className="shortcut-row">
+                  <kbd>Ctrl+/</kbd>
+                  <span>All keyboard shortcuts</span>
+                </div>
               </div>
             </div>
           </div>
         )}
-        {error && <div className="error-banner">{error}</div>}
+        {error && (
+          <div className="error-banner">
+            {error}
+            <button className="error-dismiss" onClick={() => setError(null)}>
+              &times;
+            </button>
+          </div>
+        )}
       </main>
 
       {addingUnder && manifest.nodes[addingUnder.parentId] && (
@@ -634,14 +708,7 @@ export default function App() {
         />
       )}
 
-      {exporting && (
-        <div className="dialog-backdrop">
-          <div className="export-loading">
-            <div className="export-spinner" />
-            <span>Exporting manuscript…</span>
-          </div>
-        </div>
-      )}
+      {exporting && <ExportProgress />}
 
       {showSearch && projectPath && (
         <SearchPanel
@@ -678,7 +745,9 @@ export default function App() {
         />
       )}
 
-      {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}
+      {showShortcuts && <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />}
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

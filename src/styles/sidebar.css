@@ -42,6 +42,42 @@
   background: none;
 }
 
+/* ── Tree controls (filter + expand/collapse) ────────────────────────────── */
+
+.tree-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tree-filter-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.tree-filter-input:focus {
+  border-color: var(--accent);
+}
+
+.tree-filter-input::placeholder {
+  color: var(--text-dim);
+}
+
+.tree-expand-btn {
+  flex-shrink: 0;
+}
+
 .tree {
   flex: 1;
   overflow-y: auto;
@@ -125,6 +161,50 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Chevron for collapsible nodes ────────────────────────────────────────── */
+
+.tree-chevron {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  padding: 0 1px;
+  line-height: 1;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.tree-chevron:hover {
+  color: var(--text);
+  background: none;
+  border-color: transparent;
+}
+
+/* ── Doc type badge (shown on hover) ─────────────────────────────────────── */
+
+.tree-type-badge {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.tree-row:hover .tree-type-badge {
+  opacity: 1;
+}
+
+.tree-row.selected .tree-type-badge {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.tree-row.selected:hover .tree-type-badge {
+  opacity: 1;
 }
 
 .tree-add-btn {
@@ -231,7 +311,10 @@
 /* ── Drag and drop (pointer-event based) ──────────────────────────────────── */
 
 .tree-row.dragging {
-  opacity: 0.4;
+  opacity: 0.5;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  transition: opacity 0.15s, border-left-color 0.15s;
 }
 
 /* During an active drag, force grabbing cursor everywhere and prevent

@@ -18,12 +18,17 @@ function IconPicker({
   onChange: (icon: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [iconSearch, setIconSearch] = useState("");
+
+  const filteredIcons = iconSearch.trim()
+    ? ICON_NAMES.filter((name) => name.toLowerCase().includes(iconSearch.toLowerCase()))
+    : ICON_NAMES;
 
   return (
     <div className="dts-icon-picker">
       <button
         className="dts-icon-picker-trigger"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { setOpen((v) => !v); setIconSearch(""); }}
         title="Choose icon"
         type="button"
       >
@@ -32,8 +37,16 @@ function IconPicker({
       </button>
       {open && (
         <div className="dts-icon-grid-popover">
+          <input
+            className="dts-icon-search"
+            type="text"
+            placeholder="Search icons…"
+            value={iconSearch}
+            onChange={(e) => setIconSearch(e.target.value)}
+            autoFocus
+          />
           <div className="dts-icon-grid">
-            {ICON_NAMES.map((name) => {
+            {filteredIcons.map((name) => {
               const Icon = ICON_MAP[name];
               return (
                 <button
@@ -50,6 +63,11 @@ function IconPicker({
                 </button>
               );
             })}
+            {filteredIcons.length === 0 && (
+              <div style={{ gridColumn: "1 / -1", padding: "8px", color: "var(--text-dim)", fontSize: "11px" }}>
+                No icons match "{iconSearch}"
+              </div>
+            )}
           </div>
         </div>
       )}

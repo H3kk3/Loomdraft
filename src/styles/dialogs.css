@@ -249,18 +249,12 @@ button.danger-btn:hover {
 /* ── Version history panel ─────────────────────────────────────────────────── */
 
 .version-history {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  width: 340px;
-  max-height: min(70vh, 520px);
+  flex: 0 0 340px;
   background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  z-index: 530;
+  overflow: hidden;
 }
 
 .vh-header {
@@ -654,6 +648,12 @@ button.danger-btn:hover {
   }
 }
 
+.export-elapsed {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
 /* ── Document Type Settings ───────────────────────────────────────────────── */
 
 .dts-dialog {
@@ -948,6 +948,28 @@ button.danger-btn:hover {
   border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dts-icon-search {
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.dts-icon-search:focus {
+  border-color: var(--accent);
+}
+
+.dts-icon-search::placeholder {
+  color: var(--text-dim);
 }
 
 .dts-icon-grid {
@@ -982,4 +1004,63 @@ button.danger-btn:hover {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent);
   border-color: var(--accent);
+}
+
+/* ── Keyboard shortcuts panel ────────────────────────────────────────────── */
+
+.shortcuts-panel {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  width: 460px;
+  max-height: min(80vh, 560px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.shortcuts-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.shortcuts-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.shortcuts-close:hover {
+  color: var(--text);
+}
+
+.shortcuts-body {
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.shortcuts-group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  font-weight: 600;
+  margin-bottom: 6px;
 }

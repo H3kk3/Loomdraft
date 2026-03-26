@@ -44,6 +44,8 @@ interface EditorProps {
   projectPath?: string;
   onDistractionFreeChange?: (enabled: boolean) => void;
   activeTheme?: ThemeDefinition;
+  onToast?: (message: string, type: "success" | "error" | "info" | "warning") => void;
+  breadcrumbTitle?: string;
 }
 
 // ── Editor ────────────────────────────────────────────────────────────────────
@@ -56,6 +58,8 @@ export function Editor({
   projectPath,
   onDistractionFreeChange,
   activeTheme,
+  onToast,
+  breadcrumbTitle,
 }: EditorProps) {
   const [content, setContent] = useState(doc.content);
   const [activeImage, setActiveImage] = useState<ActiveImage | null>(null);
@@ -179,6 +183,8 @@ export function Editor({
             .then((r) => setManuscriptWordCount({ words: r.total_words, chars: r.total_chars }))
             .catch(() => {});
         }
+      } else if (!ok) {
+        onToast?.("Failed to save — retrying on next autosave", "error");
       }
     } finally {
       saveInFlightRef.current = false;
@@ -632,9 +638,12 @@ export function Editor({
           <span className="editor-meta">
             {doc.doc_type} · {doc.file}
           </span>
-          {isSaving && <span className="editor-meta editor-status">Saving…</span>}
-          {!isSaving && lastSavedLabel && (
-            <span className="editor-meta editor-status">Saved at {lastSavedLabel}</span>
+          {isSaving && <span className="editor-meta editor-status saving">Saving…</span>}
+          {!isSaving && dirty && (
+            <span className="editor-meta editor-status unsaved">Unsaved changes</span>
+          )}
+          {!isSaving && !dirty && lastSavedLabel && (
+            <span className="editor-meta editor-status saved">Saved at {lastSavedLabel}</span>
           )}
           {projectPath && (
             <button
@@ -685,9 +694,15 @@ export function Editor({
 
       {distractionFree && (
         <div className="df-controls">
-          {isSaving && <span className="editor-meta editor-status">Saving…</span>}
-          {!isSaving && lastSavedLabel && (
-            <span className="editor-meta editor-status">Saved at {lastSavedLabel}</span>
+          {breadcrumbTitle && (
+            <span className="df-breadcrumb">{breadcrumbTitle}</span>
+          )}
+          {isSaving && <span className="editor-meta editor-status saving">Saving…</span>}
+          {!isSaving && dirty && (
+            <span className="editor-meta editor-status unsaved">Unsaved changes</span>
+          )}
+          {!isSaving && !dirty && lastSavedLabel && (
+            <span className="editor-meta editor-status saved">Saved at {lastSavedLabel}</span>
           )}
           <button className="toolbar-btn" onClick={() => setShowOutline((v) => !v)}>
             Outline
@@ -707,28 +722,32 @@ export function Editor({
         </div>
       )}
 
-      <div className={`editor-shell${isDraggingOver ? " drag-over" : ""}`}>
-        {showOutline && (
-          <div className="outline-popover" ref={outlinePopoverRef}>
-            <div className="outline-popover-title">Headings</div>
-            <div className="outline-popover-list">
-              {outlineEntries.length ? (
-                outlineEntries.map((entry) => (
-                  <button
-                    key={`${entry.offset}-${entry.line}`}
-                    className={`outline-item level-${entry.level}`}
-                    onClick={() => jumpToHeading(entry.offset)}
-                  >
-                    <span className="outline-item-title">{entry.title}</span>
-                    <span className="outline-item-line">L{entry.line}</span>
-                  </button>
-                ))
-              ) : (
-                <div className="outline-empty">No H1-H3 headings in this document</div>
-              )}
+      <div className="editor-body">
+        <div className={`editor-shell${isDraggingOver ? " drag-over" : ""}`}>
+          {showOutline && (
+            <div className="outline-popover" ref={outlinePopoverRef}>
+              <div className="outline-popover-title">Headings</div>
+              <div className="outline-popover-list">
+                {outlineEntries.length ? (
+                  outlineEntries.map((entry) => (
+                    <button
+                      key={`${entry.offset}-${entry.line}`}
+                      className={`outline-item level-${entry.level}`}
+                      onClick={() => jumpToHeading(entry.offset)}
+                    >
+                      <span className="outline-item-title">{entry.title}</span>
+                      <span className="outline-item-line">L{entry.line}</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="outline-empty">No H1-H3 headings in this document</div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          <div ref={editorContainerRef} className="cm-editor-container" />
+        </div>
 
         {showHistory && projectPath && (
           <VersionHistory
@@ -738,8 +757,6 @@ export function Editor({
             onClose={() => setShowHistory(false)}
           />
         )}
-
-        <div ref={editorContainerRef} className="cm-editor-container" />
       </div>
 
       {/* Wiki-link hover preview card */}

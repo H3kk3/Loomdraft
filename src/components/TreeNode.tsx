@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, memo } from "react";
-import { Folder } from "lucide-react";
+import { Folder, ChevronRight, ChevronDown } from "lucide-react";
 import type { ProjectManifest } from "../types";
 import { isManuscriptDocType, type DocCategory } from "../docTypes";
 import { TREE_INDENT_PX } from "../constants";
@@ -21,6 +21,8 @@ export interface TreeNodeProps {
   draggingId: string | null;
   dropTarget: DropTarget | null;
   renamingId: string | null;
+  expandedNodes: Set<string>;
+  visibleNodes: Set<string> | null;
   onSelect: (id: string) => void;
   onAddChild: (parentId: string) => void;
   onAddToRootSection: (category: DocCategory) => void;
@@ -29,6 +31,7 @@ export interface TreeNodeProps {
   onRenameCommit: (nodeId: string, newTitle: string) => void;
   onRenameCancel: () => void;
   onStartRename: (nodeId: string) => void;
+  onToggleExpand: (nodeId: string) => void;
   depth: number;
 }
 
@@ -96,6 +99,8 @@ export const TreeNode = memo(function TreeNode({
   draggingId,
   dropTarget,
   renamingId,
+  expandedNodes,
+  visibleNodes,
   onSelect,
   onAddChild,
   onAddToRootSection,
@@ -104,17 +109,33 @@ export const TreeNode = memo(function TreeNode({
   onRenameCommit,
   onRenameCancel,
   onStartRename,
+  onToggleExpand,
   depth,
 }: TreeNodeProps) {
   const node = manifest.nodes[nodeId];
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  const isSelected = nodeId === selectedId;
+
+  // Auto-scroll selected node into view
+  useEffect(() => {
+    if (isSelected && rowRef.current) {
+      rowRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [isSelected]);
+
   if (!node) return null;
 
+  // If filtering is active and this node isn't visible, hide it
+  if (visibleNodes && !visibleNodes.has(nodeId)) return null;
+
   const hasFile = !!node.file;
-  const isSelected = nodeId === selectedId;
+  const hasChildren = node.children.length > 0;
   const isRoot = nodeId === manifest.root;
   const isDragging = draggingId === nodeId;
   const isOver = dropTarget?.overId === nodeId;
   const dropPos = isOver ? dropTarget?.position : null;
+  const isExpanded = expandedNodes.has(nodeId);
 
   const rowClasses = [
     "tree-row",
@@ -141,6 +162,8 @@ export const TreeNode = memo(function TreeNode({
     draggingId,
     dropTarget,
     renamingId,
+    expandedNodes,
+    visibleNodes,
     onSelect,
     onAddChild,
     onAddToRootSection,
@@ -149,12 +172,19 @@ export const TreeNode = memo(function TreeNode({
     onRenameCommit,
     onRenameCancel,
     onStartRename,
+    onToggleExpand,
     depth: depth + 1,
   };
+
+  // Determine doc type label for badge
+  const docTypeDef = node.doc_type
+    ? manifest.doc_types.find((dt) => dt.id === node.doc_type)
+    : null;
 
   return (
     <div className="tree-node" style={{ paddingLeft: depth * TREE_INDENT_PX }}>
       <div
+        ref={rowRef}
         className={rowClasses}
         data-node-id={nodeId}
         onPointerDown={(e) => {
@@ -164,11 +194,14 @@ export const TreeNode = memo(function TreeNode({
           onDragStart(nodeId, e.clientX, e.clientY);
         }}
         onMouseUp={(e) => {
-          if (!hasFile) return;
           if (e.button !== 0) return;
           if ((e.target as HTMLElement).closest("button")) return;
           if (draggingId) return;
-          onSelect(nodeId);
+          if (hasFile) {
+            onSelect(nodeId);
+          } else if (!isRoot && hasChildren) {
+            onToggleExpand(nodeId);
+          }
         }}
         tabIndex={isRoot ? undefined : 0}
         onKeyDown={(e) => {
@@ -190,6 +223,23 @@ export const TreeNode = memo(function TreeNode({
           onContextMenu(nodeId, e.clientX, e.clientY);
         }}
       >
+        {/* Collapse chevron for non-root nodes with children */}
+        {!isRoot && hasChildren && (
+          <button
+            className="tree-chevron"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand(nodeId);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {isExpanded ? (
+              <ChevronDown size={12} strokeWidth={2} />
+            ) : (
+              <ChevronRight size={12} strokeWidth={2} />
+            )}
+          </button>
+        )}
         <span className="tree-icon">
           {hasFile ? (
             <DocTypeIcon docType={node.doc_type} docTypes={manifest.doc_types} />
@@ -205,6 +255,10 @@ export const TreeNode = memo(function TreeNode({
           />
         ) : (
           <span className="tree-title">{node.title ?? nodeId}</span>
+        )}
+        {/* Doc type badge on hover */}
+        {hasFile && docTypeDef && (
+          <span className="tree-type-badge">{docTypeDef.label}</span>
         )}
         {!isRoot && (
           <button
@@ -236,7 +290,7 @@ export const TreeNode = memo(function TreeNode({
               <TreeNode key={childId} nodeId={childId} {...childProps} />
             ))
           ) : (
-            <div className="tree-empty-hint">No manuscript documents yet</div>
+            <div className="tree-empty-hint">Click + to add your first chapter</div>
           )}
 
           <div className="tree-section-divider" />
@@ -255,10 +309,11 @@ export const TreeNode = memo(function TreeNode({
               <TreeNode key={childId} nodeId={childId} {...childProps} />
             ))
           ) : (
-            <div className="tree-empty-hint">No planning documents yet</div>
+            <div className="tree-empty-hint">Click + to add a character, location, or note</div>
           )}
         </>
       ) : (
+        isExpanded &&
         node.children.map((childId) => <TreeNode key={childId} nodeId={childId} {...childProps} />)
       )}
     </div>
