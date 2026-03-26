@@ -121,9 +121,8 @@ const wikiLinkHoverHandler = EditorView.domEventHandlers({
     const nodeId = resolveWikiLink(target, view);
     if (!nodeId) return false;
 
-    const rect = target.getBoundingClientRect();
     const onHover = view.state.facet(onLinkHoverFacet);
-    if (onHover) onHover({ nodeId, rect });
+    if (onHover) onHover({ nodeId, element: target });
     return false;
   },
 
@@ -133,6 +132,8 @@ const wikiLinkHoverHandler = EditorView.domEventHandlers({
 
     // Don't close if moving to the preview card itself
     if (related?.closest(".link-preview-card")) return false;
+    // Don't close if still within the same wiki-link span (child element mouseover)
+    if (related?.closest(".wiki-link")) return false;
 
     if (target.closest(".wiki-link")) {
       const onHover = view.state.facet(onLinkHoverFacet);

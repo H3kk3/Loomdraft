@@ -21,9 +21,14 @@ export function LinkPreviewCard({
   const node = manifest.nodes[hoveredLink.nodeId];
   if (!node) return null;
 
-  const left = Math.min(hoveredLink.rect.left, window.innerWidth - 280);
-  const belowSpace = window.innerHeight - hoveredLink.rect.bottom;
-  const top = belowSpace > 170 ? hoveredLink.rect.bottom + 6 : hoveredLink.rect.top - 170;
+  // If the element was detached (CM rebuilt decorations), bail out
+  if (!hoveredLink.element.isConnected) return null;
+
+  // Compute rect fresh from the DOM element to handle scroll/reflow
+  const rect = hoveredLink.element.getBoundingClientRect();
+  const left = Math.min(rect.left, window.innerWidth - 280);
+  const belowSpace = window.innerHeight - rect.bottom;
+  const top = belowSpace > 170 ? rect.bottom + 6 : Math.max(4, rect.top - 170);
 
   return (
     <div
@@ -34,7 +39,7 @@ export function LinkPreviewCard({
     >
       <div className="lpc-header">
         <span className="lpc-icon">
-          <DocTypeIcon docType={node.doc_type} />
+          <DocTypeIcon docType={node.doc_type} docTypes={manifest.doc_types} />
         </span>
         <span className="lpc-title">{node.title ?? hoveredLink.nodeId}</span>
         <span className="lpc-type">{node.doc_type}</span>

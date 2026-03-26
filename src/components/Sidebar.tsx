@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, memo } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo, memo } from "react";
 import {
   Library,
   BookOpen,
@@ -18,11 +18,35 @@ import {
   Download,
   Palette,
   Search,
+  Crown,
+  Shield,
+  Globe,
+  Heart,
+  Star,
+  Flag,
+  Feather,
+  Flame,
+  Lightbulb,
+  Music,
+  Puzzle,
+  Skull,
+  Target,
+  Wand,
+  Sparkles,
+  Gem,
+  Bookmark,
+  Compass,
+  Eye,
+  Pen,
+  Settings,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  type LucideIcon,
 } from "lucide-react";
 import type { Theme } from "../useTheme";
 import type { ThemeMetadata, FontInfo, FontPreference } from "../themes/themeTypes";
 import { ThemePicker } from "./ThemePicker";
-import type { ProjectManifest } from "../types";
+import type { ProjectManifest, DocTypeDefinition } from "../types";
 import type { DocCategory } from "../docTypes";
 import { DRAG_THRESHOLD_PX } from "../constants";
 import { TreeNode, type DropTarget, type DropPos } from "./TreeNode";
@@ -47,44 +71,61 @@ function findParent(manifest: ProjectManifest, nodeId: string): string | null {
   return null;
 }
 
+/** Compute which nodes should be visible given a filter query.
+ *  Returns null if no filter is active, or a Set of visible node IDs
+ *  (matching nodes + all their ancestors up to root). */
+function computeVisibleNodes(
+  manifest: ProjectManifest,
+  query: string,
+): Set<string> | null {
+  if (!query.trim()) return null;
+  const lowerQ = query.toLowerCase();
+  const visible = new Set<string>();
+
+  for (const [id, node] of Object.entries(manifest.nodes)) {
+    if ((node.title ?? id).toLowerCase().includes(lowerQ)) {
+      // Add this node and all ancestors
+      visible.add(id);
+      let current = id;
+      let parent = findParent(manifest, current);
+      while (parent) {
+        visible.add(parent);
+        current = parent;
+        parent = findParent(manifest, current);
+      }
+    }
+  }
+  return visible;
+}
+
+// ── Icon map ──────────────────────────────────────────────────────────────────
+
+export const ICON_MAP: Record<string, LucideIcon> = {
+  Library, BookOpen, Film, Pause, Scissors, User, MapPin, Sword, Building2,
+  CalendarDays, ScrollText, ListTree, Microscope, StickyNote, FileText,
+  Crown, Shield, Globe, Heart, Star, Flag, Feather, Flame, Lightbulb,
+  Music, Puzzle, Skull, Target, Wand, Sparkles, Gem, Bookmark, Compass,
+  Eye, Pen,
+};
+
 // ── DocTypeIcon ───────────────────────────────────────────────────────────────
 
-export const DocTypeIcon = memo(function DocTypeIcon({ docType }: { docType?: string }) {
+export const DocTypeIcon = memo(function DocTypeIcon({
+  docType,
+  docTypes,
+}: {
+  docType?: string;
+  docTypes?: DocTypeDefinition[];
+}) {
   const props = { size: 14, strokeWidth: 1.75 };
-  switch (docType) {
-    case "part":
-      return <Library {...props} />;
-    case "chapter":
-      return <BookOpen {...props} />;
-    case "scene":
-      return <Film {...props} />;
-    case "interlude":
-      return <Pause {...props} />;
-    case "snippet":
-      return <Scissors {...props} />;
-    case "character":
-      return <User {...props} />;
-    case "location":
-    case "place":
-      return <MapPin {...props} />;
-    case "item":
-      return <Sword {...props} />;
-    case "organization":
-      return <Building2 {...props} />;
-    case "event":
-      return <CalendarDays {...props} />;
-    case "lore":
-      return <ScrollText {...props} />;
-    case "outline":
-      return <ListTree {...props} />;
-    case "research":
-      return <Microscope {...props} />;
-    case "note":
-    case "manuscript":
-      return <StickyNote {...props} />;
-    default:
-      return <FileText {...props} />;
+  if (docType && docTypes) {
+    const def = docTypes.find((dt) => dt.id === docType);
+    if (def) {
+      const Icon = ICON_MAP[def.icon];
+      if (Icon) return <Icon {...props} />;
+    }
   }
+  return <FileText {...props} />;
 });
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -100,6 +141,7 @@ export interface SidebarProps {
   onExport: () => void;
   onClose: () => void;
   onSearch: () => void;
+  onDocTypeSettings: () => void;
   theme: Theme;
   onToggleTheme: () => void;
   // Extended theme system
@@ -126,6 +168,7 @@ export function Sidebar({
   onExport,
   onClose,
   onSearch,
+  onDocTypeSettings,
   theme: _theme,
   onToggleTheme: _onToggleTheme,
   activeThemeId,
@@ -141,17 +184,82 @@ export function Sidebar({
 }: SidebarProps) {
   const rootNode = manifest.nodes[manifest.root];
 
+  // ── Expand/collapse state ──────────────────────────────────────────────────
+
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
+    // Default: all nodes expanded
+    const all = new Set<string>();
+    for (const id of Object.keys(manifest.nodes)) {
+      all.add(id);
+    }
+    return all;
+  });
+
+  // When manifest changes (new nodes added), ensure new nodes are expanded
+  useEffect(() => {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const id of Object.keys(manifest.nodes)) {
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [manifest]);
+
+  const handleToggleExpand = useCallback((nodeId: string) => {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleExpandAll = useCallback(() => {
+    setExpandedNodes(new Set(Object.keys(manifest.nodes)));
+  }, [manifest]);
+
+  const handleCollapseAll = useCallback(() => {
+    // Keep root expanded
+    setExpandedNodes(new Set([manifest.root]));
+  }, [manifest.root]);
+
+  // ── Tree filter ────────────────────────────────────────────────────────────
+
+  const [treeFilter, setTreeFilter] = useState("");
+  const filterInputRef = useRef<HTMLInputElement>(null);
+
+  const visibleNodes = useMemo(
+    () => computeVisibleNodes(manifest, treeFilter),
+    [manifest, treeFilter],
+  );
+
+  // Ctrl+Shift+E to focus filter
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "e") {
+        e.preventDefault();
+        filterInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   // ── Pointer-event drag system ──────────────────────────────────────────────
-  //
-  // HTML5 DnD is unreliable in Tauri's WKWebView on macOS (dragover/drop
-  // events don't propagate). Pointer events work perfectly everywhere.
 
   const dragRef = useRef<DragState | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const dropTargetRef = useRef<DropTarget | null>(null);
 
-  // Keep ref in sync with state so pointerup can read the latest value
   useEffect(() => {
     dropTargetRef.current = dropTarget;
   }, [dropTarget]);
@@ -175,7 +283,6 @@ export function Sidebar({
       const targetIdx = siblings.indexOf(targetId);
       newPosition = pos === "before" ? targetIdx : targetIdx + 1;
 
-      // Same-parent adjustment: removing srcId shifts later siblings by -1
       if (findParent(manifest, srcId) === newParentId) {
         const oldIdx = siblings.indexOf(srcId);
         if (oldIdx !== -1 && oldIdx < newPosition) newPosition -= 1;
@@ -185,24 +292,21 @@ export function Sidebar({
     onMoveNode(srcId, newParentId, newPosition);
   };
 
-  // Document-level pointer listeners for drag tracking
   useEffect(() => {
     const onPointerMove = (e: PointerEvent) => {
       const drag = dragRef.current;
       if (!drag) return;
 
-      // Activation threshold: 5px movement before entering drag mode
       if (!drag.active) {
         const dx = e.clientX - drag.startX;
         const dy = e.clientY - drag.startY;
         if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) return;
         drag.active = true;
         document.body.classList.add("dragging-active");
-        window.getSelection()?.removeAllRanges(); // clear any selection that snuck through
+        window.getSelection()?.removeAllRanges();
         setDraggingId(drag.nodeId);
       }
 
-      // Hit-test: find the .tree-row under the cursor
       const els = document.elementsFromPoint(e.clientX, e.clientY);
       const rowEl = els.find(
         (el) => el instanceof HTMLElement && el.classList.contains("tree-row"),
@@ -219,7 +323,6 @@ export function Sidebar({
         return;
       }
 
-      // Calculate drop position from cursor vs row bounds
       const rect = rowEl.getBoundingClientRect();
       let pos: DropPos;
       if (targetId === manifest.root) {
@@ -243,7 +346,6 @@ export function Sidebar({
       document.body.classList.remove("dragging-active");
 
       if (!drag?.active) {
-        // Was not a real drag (didn't exceed threshold) — clean up silently
         setDraggingId(null);
         setDropTarget(null);
         return;
@@ -327,6 +429,9 @@ export function Sidebar({
           >
             <Palette size={15} strokeWidth={1.75} />
           </button>
+          <button className="icon-btn" title="Document types" onClick={onDocTypeSettings}>
+            <Settings size={15} strokeWidth={1.75} />
+          </button>
           <button className="icon-btn" title="Export manuscript" onClick={onExport}>
             <Download size={15} strokeWidth={1.75} />
           </button>
@@ -354,6 +459,38 @@ export function Sidebar({
         />
       )}
 
+      {/* Tree filter & expand controls */}
+      <div className="tree-controls">
+        <input
+          ref={filterInputRef}
+          className="tree-filter-input"
+          type="text"
+          placeholder="Filter nodes…"
+          value={treeFilter}
+          onChange={(e) => setTreeFilter(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setTreeFilter("");
+              filterInputRef.current?.blur();
+            }
+          }}
+        />
+        <button
+          className="icon-btn tree-expand-btn"
+          title="Expand all"
+          onClick={handleExpandAll}
+        >
+          <ChevronsUpDown size={14} strokeWidth={1.75} />
+        </button>
+        <button
+          className="icon-btn tree-expand-btn"
+          title="Collapse all"
+          onClick={handleCollapseAll}
+        >
+          <ChevronsDownUp size={14} strokeWidth={1.75} />
+        </button>
+      </div>
+
       <div className="tree">
         <TreeNode
           nodeId={manifest.root}
@@ -362,6 +499,8 @@ export function Sidebar({
           draggingId={draggingId}
           dropTarget={dropTarget}
           renamingId={renamingId}
+          expandedNodes={expandedNodes}
+          visibleNodes={visibleNodes}
           onSelect={onSelectNode}
           onAddChild={handleAddChild}
           onAddToRootSection={handleAddToRootSection}
@@ -370,6 +509,7 @@ export function Sidebar({
           onRenameCommit={handleRenameCommit}
           onRenameCancel={handleRenameCancel}
           onStartRename={handleStartRename}
+          onToggleExpand={handleToggleExpand}
           depth={0}
         />
       </div>

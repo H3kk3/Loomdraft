@@ -102,9 +102,31 @@ pub struct SearchResult {
     pub snippet: Option<String>,
 }
 
+/// Sanitize a user query for FTS5 MATCH by quoting each token.
+/// This prevents unbalanced quotes and FTS5 operators from crashing the query.
+fn sanitize_fts5_query(query: &str) -> String {
+    let tokens: Vec<String> = query
+        .split_whitespace()
+        .filter(|t| !t.is_empty())
+        .map(|t| {
+            let escaped = t.replace('"', "\"\"");
+            format!("\"{escaped}\"")
+        })
+        .collect();
+    if tokens.is_empty() {
+        return String::new();
+    }
+    // Append * to last token for prefix matching
+    let mut result = tokens.join(" ");
+    result.push('*');
+    result
+}
+
 pub fn search(conn: &Connection, query: &str) -> SqlResult<Vec<SearchResult>> {
-    // Append * for prefix matching on the last token
-    let fts_query = format!("{query}*");
+    let fts_query = sanitize_fts5_query(query);
+    if fts_query.is_empty() {
+        return Ok(Vec::new());
+    }
 
     let mut stmt = conn.prepare(
         "SELECT d.id, d.title, d.type, d.file,

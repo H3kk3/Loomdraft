@@ -46,12 +46,18 @@ export function ContextMenu({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const items = menuRef.current?.querySelectorAll<HTMLButtonElement>(".context-menu-item");
     if (!items?.length) return;
-    if (e.key === "ArrowDown") {
+    if (e.key === "ArrowDown" || e.key === "Tab" && !e.shiftKey) {
       e.preventDefault();
       setFocusIdx((i) => (i + 1) % items.length);
-    } else if (e.key === "ArrowUp") {
+    } else if (e.key === "ArrowUp" || e.key === "Tab" && e.shiftKey) {
       e.preventDefault();
       setFocusIdx((i) => (i - 1 + items.length) % items.length);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setFocusIdx(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setFocusIdx(items.length - 1);
     } else if (e.key === "Escape") {
       e.preventDefault();
       onClose();
@@ -63,6 +69,7 @@ export function ContextMenu({
       ref={menuRef}
       className="context-menu"
       role="menu"
+      aria-label="Context menu"
       style={{
         position: "fixed",
         top: Math.min(y, window.innerHeight - 160),

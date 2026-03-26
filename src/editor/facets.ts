@@ -31,7 +31,8 @@ export const onImageClickFacet = Facet.define<
 /** Hovered wiki-link info (nodeId + position) */
 export interface HoveredLink {
   nodeId: string;
-  rect: DOMRect;
+  /** The DOM element for the wiki-link span — used to compute fresh position on render */
+  element: Element;
 }
 
 /** Callback when a wiki-link is hovered (to show LinkPreviewCard) */

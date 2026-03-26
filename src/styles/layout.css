@@ -98,6 +98,24 @@
   font-size: 13px;
   max-width: 80%;
   text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.error-dismiss {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  opacity: 0.7;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.error-dismiss:hover {
+  opacity: 1;
 }
 
 .loading {
@@ -116,7 +134,32 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 14px;
+  position: relative;
+}
+
+/* ── Logo ─────────────────────────────────────────────────────────────────── */
+
+.welcome-logo {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 40%, transparent))
+          drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+  animation: welcome-logo-in 0.6s ease-out both;
+  user-select: none;
+  pointer-events: none;
+}
+
+@keyframes welcome-logo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .welcome-theme-area {
@@ -179,21 +222,35 @@
 }
 
 .welcome-title {
-  font-size: 40px;
+  font-size: 36px;
   font-weight: 700;
-  letter-spacing: -1px;
+  letter-spacing: 0.5px;
   color: var(--text);
+  animation: welcome-fade-in 0.5s ease-out 0.15s both;
 }
 
 .welcome-sub {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-dim);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  animation: welcome-fade-in 0.5s ease-out 0.25s both;
 }
 
 .welcome-actions {
   display: flex;
   gap: 12px;
+  animation: welcome-fade-in 0.5s ease-out 0.35s both;
+}
+
+@keyframes welcome-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Recent projects ──────────────────────────────────────────────────────── */
@@ -215,7 +272,13 @@
   padding: 0 8px 4px;
 }
 
+.recent-item-row {
+  display: flex;
+  gap: 0;
+}
+
 .recent-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -224,11 +287,12 @@
   padding: 8px 10px;
   background: var(--bg-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius) 0 0 var(--radius);
   color: var(--text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+  min-width: 0;
   transition:
     border-color 0.15s,
     background 0.15s;
@@ -237,6 +301,29 @@
 .recent-item:hover {
   border-color: var(--accent);
   background: var(--bg-3);
+}
+
+.recent-remove {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--text-dim);
+  font-size: 16px;
+  padding: 0 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.recent-item-row:hover .recent-remove {
+  opacity: 1;
+}
+
+.recent-remove:hover {
+  color: var(--danger);
 }
 
 .recent-path {

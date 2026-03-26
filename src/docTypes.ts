@@ -1,33 +1,33 @@
-import type { DocType } from "./types";
+import type { DocTypeDefinition } from "./types";
 
 export type DocCategory = "manuscript" | "planning";
 
-export const MANUSCRIPT_DOC_TYPES: DocType[] = ["part", "chapter", "scene", "interlude", "snippet"];
-
-export const PLANNING_DOC_TYPES: DocType[] = [
-  "character",
-  "location",
-  "item",
-  "organization",
-  "event",
-  "lore",
-  "outline",
-  "research",
-  "note",
-];
-
-const MANUSCRIPT_TYPE_SET = new Set<string>(MANUSCRIPT_DOC_TYPES);
-const ALL_DOC_TYPES: DocType[] = [...MANUSCRIPT_DOC_TYPES, ...PLANNING_DOC_TYPES];
-
-export function isManuscriptDocType(docType?: string | null): boolean {
-  return !!docType && MANUSCRIPT_TYPE_SET.has(docType);
+export function getManuscriptDocTypes(docTypes: DocTypeDefinition[]): DocTypeDefinition[] {
+  return docTypes.filter((dt) => dt.category === "manuscript");
 }
 
-export function getDocCategory(docType?: string | null): DocCategory {
-  return isManuscriptDocType(docType) ? "manuscript" : "planning";
+export function getPlanningDocTypes(docTypes: DocTypeDefinition[]): DocTypeDefinition[] {
+  return docTypes.filter((dt) => dt.category === "planning");
 }
 
-export function getAllowedChildDocTypes(parentDocType?: string | null): DocType[] {
-  if (!parentDocType) return ALL_DOC_TYPES;
-  return isManuscriptDocType(parentDocType) ? MANUSCRIPT_DOC_TYPES : PLANNING_DOC_TYPES;
+export function isManuscriptDocType(docTypes: DocTypeDefinition[], typeId?: string | null): boolean {
+  return !!typeId && docTypes.some((dt) => dt.id === typeId && dt.category === "manuscript");
+}
+
+export function getDocCategory(docTypes: DocTypeDefinition[], typeId?: string | null): DocCategory {
+  return isManuscriptDocType(docTypes, typeId) ? "manuscript" : "planning";
+}
+
+export function getAllowedChildDocTypes(
+  docTypes: DocTypeDefinition[],
+  parentDocType?: string | null,
+): DocTypeDefinition[] {
+  if (!parentDocType) return docTypes;
+  const parentIsManuscript = isManuscriptDocType(docTypes, parentDocType);
+  return docTypes.filter((dt) => (dt.category === "manuscript") === parentIsManuscript);
+}
+
+export function getDocTypeLabel(docTypes: DocTypeDefinition[], typeId?: string | null): string {
+  if (!typeId) return "Unknown";
+  return docTypes.find((dt) => dt.id === typeId)?.label ?? typeId;
 }

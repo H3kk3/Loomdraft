@@ -1,11 +1,49 @@
 use chrono::Utc;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-pub const MANUSCRIPT_DOC_TYPES: [&str; 5] = ["part", "chapter", "scene", "interlude", "snippet"];
+// ── Doc type definitions ──────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocTypeDefinition {
+    pub id: String,
+    pub label: String,
+    pub category: String,
+    pub icon: String,
+    #[serde(default = "default_heading_level")]
+    pub heading_level: u8,
+    #[serde(default)]
+    pub builtin: bool,
+}
+
+fn default_heading_level() -> u8 {
+    3
+}
+
+pub fn default_doc_types() -> Vec<DocTypeDefinition> {
+    vec![
+        // Manuscript types
+        DocTypeDefinition { id: "part".into(), label: "Part".into(), category: "manuscript".into(), icon: "Library".into(), heading_level: 1, builtin: true },
+        DocTypeDefinition { id: "chapter".into(), label: "Chapter".into(), category: "manuscript".into(), icon: "BookOpen".into(), heading_level: 2, builtin: true },
+        DocTypeDefinition { id: "scene".into(), label: "Scene".into(), category: "manuscript".into(), icon: "Film".into(), heading_level: 3, builtin: true },
+        DocTypeDefinition { id: "interlude".into(), label: "Interlude".into(), category: "manuscript".into(), icon: "Pause".into(), heading_level: 3, builtin: true },
+        DocTypeDefinition { id: "snippet".into(), label: "Snippet".into(), category: "manuscript".into(), icon: "Scissors".into(), heading_level: 3, builtin: true },
+        // Planning types
+        DocTypeDefinition { id: "character".into(), label: "Character".into(), category: "planning".into(), icon: "User".into(), heading_level: 0, builtin: true },
+        DocTypeDefinition { id: "location".into(), label: "Location".into(), category: "planning".into(), icon: "MapPin".into(), heading_level: 0, builtin: true },
+        DocTypeDefinition { id: "item".into(), label: "Item".into(), category: "planning".into(), icon: "Sword".into(), heading_level: 0, builtin: true },
+        DocTypeDefinition { id: "organization".into(), label: "Organization".into(), category: "planning".into(), icon: "Building2".into(), heading_level: 0, builtin: true },
+        DocTypeDefinition { id: "event".into(), label: "Event".into(), category: "planning".into(), icon: "CalendarDays".into(), heading_level: 0, builtin: true },
+        DocTypeDefinition { id: "lore".into(), label: "Lore".into(), category: "planning".into(), icon: "ScrollText".into(), heading_level: 0, builtin: true },
+        DocTypeDefinition { id: "outline".into(), label: "Outline".into(), category: "planning".into(), icon: "ListTree".into(), heading_level: 0, builtin: true },
+        DocTypeDefinition { id: "research".into(), label: "Research".into(), category: "planning".into(), icon: "Microscope".into(), heading_level: 0, builtin: true },
+        DocTypeDefinition { id: "note".into(), label: "Note".into(), category: "planning".into(), icon: "StickyNote".into(), heading_level: 0, builtin: true },
+    ]
+}
 
 // ── Manifest types ────────────────────────────────────────────────────────────
 
@@ -14,6 +52,8 @@ pub struct ProjectManifest {
     pub version: u32,
     pub root: String,
     pub nodes: HashMap<String, ProjectNode>,
+    #[serde(default)]
+    pub doc_types: Vec<DocTypeDefinition>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +123,7 @@ pub fn create_project(dir: &Path, name: &str) -> Result<(PathBuf, ProjectManifes
         version: 1,
         root: "node_root".to_string(),
         nodes,
+        doc_types: default_doc_types(),
     };
 
     save_manifest(&project_path, &manifest)?;
@@ -95,7 +136,16 @@ pub fn load_manifest(project_path: &Path) -> Result<ProjectManifest, String> {
     let path = project_path.join("project.json");
     let raw = fs::read_to_string(&path)
         .map_err(|e| format!("Cannot read project.json: {e}"))?;
-    serde_json::from_str(&raw).map_err(|e| format!("Malformed project.json: {e}"))
+    let mut manifest: ProjectManifest =
+        serde_json::from_str(&raw).map_err(|e| format!("Malformed project.json: {e}"))?;
+
+    // Migrate: populate doc_types if missing (existing projects before this feature)
+    if manifest.doc_types.is_empty() {
+        manifest.doc_types = default_doc_types();
+        let _ = save_manifest(project_path, &manifest);
+    }
+
+    Ok(manifest)
 }
 
 pub fn save_manifest(project_path: &Path, manifest: &ProjectManifest) -> Result<(), String> {
@@ -149,8 +199,11 @@ pub fn create_backup(project_path: &Path, node_id: &str) -> Result<(), String> {
 
     let timestamp = Utc::now().format("%Y%m%dT%H%M%S%.3f").to_string();
     let backup_file = dir.join(format!("{timestamp}.md"));
-    fs::copy(&file_path, &backup_file)
+    let tmp_file = dir.join(format!("{timestamp}.md.tmp"));
+    fs::copy(&file_path, &tmp_file)
         .map_err(|e| format!("Cannot create backup: {e}"))?;
+    fs::rename(&tmp_file, &backup_file)
+        .map_err(|e| format!("Cannot finalize backup: {e}"))?;
 
     // Prune old backups — keep only the newest MAX_BACKUPS_PER_NODE
     prune_backups(&dir)?;
@@ -338,7 +391,7 @@ pub fn save_document(
 
     fm.modified = Some(Utc::now().to_rfc3339());
 
-    let raw = write_frontmatter(&fm, content);
+    let raw = write_frontmatter(&fm, content)?;
     let tmp_path = file_path.with_extension("md.tmp");
     fs::write(&tmp_path, &raw).map_err(|e| format!("Cannot write temp file: {e}"))?;
     fs::rename(&tmp_path, &file_path).map_err(|e| format!("Cannot finalize file: {e}"))?;
@@ -360,8 +413,8 @@ pub fn save_document(
 
 // ── Node management ───────────────────────────────────────────────────────────
 
-pub fn is_manuscript_doc_type(doc_type: &str) -> bool {
-    MANUSCRIPT_DOC_TYPES.contains(&doc_type)
+pub fn is_manuscript_doc_type(doc_types: &[DocTypeDefinition], doc_type: &str) -> bool {
+    doc_types.iter().any(|dt| dt.id == doc_type && dt.category == "manuscript")
 }
 
 fn node_is_manuscript(manifest: &ProjectManifest, node_id: &str) -> Option<bool> {
@@ -369,7 +422,7 @@ fn node_is_manuscript(manifest: &ProjectManifest, node_id: &str) -> Option<bool>
         .nodes
         .get(node_id)
         .and_then(|n| n.doc_type.as_deref())
-        .map(is_manuscript_doc_type)
+        .map(|dt| is_manuscript_doc_type(&manifest.doc_types, dt))
 }
 
 fn normalize_root_children_by_category(manifest: &mut ProjectManifest) {
@@ -420,15 +473,18 @@ pub fn add_node(
     if !manifest.nodes.contains_key(parent_id) {
         return Err(format!("Parent node '{parent_id}' not found"));
     }
+    if !manifest.doc_types.iter().any(|dt| dt.id == doc_type) {
+        return Err(format!("Unknown document type '{doc_type}'"));
+    }
     if let Some(parent_is_manuscript) = node_is_manuscript(&manifest, parent_id) {
-        let child_is_manuscript = is_manuscript_doc_type(doc_type);
+        let child_is_manuscript = is_manuscript_doc_type(&manifest.doc_types, doc_type);
         if parent_is_manuscript != child_is_manuscript {
             return Err("Parent and child must both be manuscript or both be planning".to_string());
         }
     }
 
     let node_id = format!("node-{}", &Uuid::new_v4().to_string()[..8]);
-    let dir = node_type_to_dir(doc_type);
+    let dir = node_type_to_dir(&manifest.doc_types, doc_type);
     let prefix = node_type_to_prefix(doc_type);
     let slug = title_to_slug(title);
 
@@ -444,7 +500,7 @@ pub fn add_node(
         created: Some(Utc::now().to_rfc3339()),
         modified: None,
     };
-    let raw = write_frontmatter(&fm, "");
+    let raw = write_frontmatter(&fm, "")?;
     fs::write(project_path.join(&file_rel), raw)
         .map_err(|e| format!("Cannot create document file: {e}"))?;
 
@@ -636,7 +692,7 @@ pub fn rename_node(
             if let Some((mut fm, body)) = parse_frontmatter(&raw) {
                 fm.title = new_title.to_string();
                 fm.modified = Some(Utc::now().to_rfc3339());
-                fs::write(&file_path, write_frontmatter(&fm, &body))
+                fs::write(&file_path, write_frontmatter(&fm, &body)?)
                     .map_err(|e| e.to_string())?;
             }
         }
@@ -646,30 +702,88 @@ pub fn rename_node(
     Ok(manifest)
 }
 
+// ── Doc type CRUD ─────────────────────────────────────────────────────────────
+
+pub fn add_doc_type(
+    project_path: &Path,
+    doc_type: DocTypeDefinition,
+) -> Result<Vec<DocTypeDefinition>, String> {
+    let mut manifest = load_manifest(project_path)?;
+
+    if doc_type.id.is_empty() {
+        return Err("Document type id cannot be empty".to_string());
+    }
+    if doc_type.label.is_empty() {
+        return Err("Document type label cannot be empty".to_string());
+    }
+    if doc_type.category != "manuscript" && doc_type.category != "planning" {
+        return Err("Category must be 'manuscript' or 'planning'".to_string());
+    }
+    if manifest.doc_types.iter().any(|dt| dt.id == doc_type.id) {
+        return Err(format!("A document type with id '{}' already exists", doc_type.id));
+    }
+
+    manifest.doc_types.push(doc_type);
+    save_manifest(project_path, &manifest)?;
+    Ok(manifest.doc_types)
+}
+
+pub fn update_doc_type(
+    project_path: &Path,
+    doc_type: DocTypeDefinition,
+) -> Result<Vec<DocTypeDefinition>, String> {
+    let mut manifest = load_manifest(project_path)?;
+
+    let existing = manifest.doc_types.iter_mut().find(|dt| dt.id == doc_type.id);
+    match existing {
+        Some(dt) => {
+            dt.label = doc_type.label;
+            dt.icon = doc_type.icon;
+            dt.heading_level = doc_type.heading_level;
+            // Don't allow changing category or id of existing types
+        }
+        None => return Err(format!("Document type '{}' not found", doc_type.id)),
+    }
+
+    save_manifest(project_path, &manifest)?;
+    Ok(manifest.doc_types)
+}
+
+pub fn remove_doc_type(
+    project_path: &Path,
+    type_id: &str,
+) -> Result<Vec<DocTypeDefinition>, String> {
+    let mut manifest = load_manifest(project_path)?;
+
+    if !manifest.doc_types.iter().any(|dt| dt.id == type_id) {
+        return Err(format!("Document type '{type_id}' not found"));
+    }
+
+    // Check if any nodes use this type
+    let usage_count = manifest
+        .nodes
+        .values()
+        .filter(|n| n.doc_type.as_deref() == Some(type_id))
+        .count();
+    if usage_count > 0 {
+        return Err(format!(
+            "Cannot remove '{type_id}': {usage_count} document(s) still use this type"
+        ));
+    }
+
+    manifest.doc_types.retain(|dt| dt.id != type_id);
+    save_manifest(project_path, &manifest)?;
+    Ok(manifest.doc_types)
+}
+
 // ── Wiki-link extraction ──────────────────────────────────────────────────────
 
 /// Returns all `[[target]]` link targets found in `content`.
 pub fn extract_wiki_links(content: &str) -> Vec<String> {
-    let mut links = Vec::new();
-    let bytes = content.as_bytes();
-    let mut i = 0;
-    while i + 1 < bytes.len() {
-        if bytes[i] == b'[' && bytes[i + 1] == b'[' {
-            i += 2;
-            let start = i;
-            while i + 1 < bytes.len() && !(bytes[i] == b']' && bytes[i + 1] == b']') {
-                i += 1;
-            }
-            if i + 1 < bytes.len() {
-                // Strip namespace prefix: [[char:aiko]] → "aiko" kept as-is (we store full ref)
-                links.push(content[start..i].to_string());
-                i += 2;
-                continue;
-            }
-        }
-        i += 1;
-    }
-    links
+    let re = Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
+    re.captures_iter(content)
+        .map(|cap| cap[1].to_string())
+        .collect()
 }
 
 // ── Frontmatter helpers ───────────────────────────────────────────────────────
@@ -700,10 +814,10 @@ pub fn parse_frontmatter(content: &str) -> Option<(DocumentFrontmatter, String)>
     Some((fm, body))
 }
 
-pub fn write_frontmatter(fm: &DocumentFrontmatter, body: &str) -> String {
-    // serde_yaml 0.9 to_string() outputs plain YAML with a trailing newline
-    let yaml = serde_yaml::to_string(fm).unwrap_or_default();
-    format!("---\n{}---\n\n{}", yaml, body)
+pub fn write_frontmatter(fm: &DocumentFrontmatter, body: &str) -> Result<String, String> {
+    let yaml = serde_yaml::to_string(fm)
+        .map_err(|e| format!("Cannot serialize frontmatter: {e}"))?;
+    Ok(format!("---\n{}---\n\n{}", yaml, body))
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -735,10 +849,11 @@ fn title_to_slug(title: &str) -> String {
         .join("-")
 }
 
-fn node_type_to_dir(doc_type: &str) -> &'static str {
-    match doc_type {
-        "part" | "chapter" | "scene" | "interlude" | "snippet" => "manuscript",
-        _ => "kb",
+fn node_type_to_dir(doc_types: &[DocTypeDefinition], doc_type: &str) -> &'static str {
+    if is_manuscript_doc_type(doc_types, doc_type) {
+        "manuscript"
+    } else {
+        "kb"
     }
 }
 
@@ -841,7 +956,7 @@ mod tests {
             created: None,
             modified: None,
         };
-        let raw = write_frontmatter(&fm, "Body content");
+        let raw = write_frontmatter(&fm, "Body content").expect("should serialize");
         let (parsed, body) = parse_frontmatter(&raw).expect("should roundtrip");
         assert_eq!(parsed.id, "node-42");
         assert_eq!(parsed.doc_type, "scene");
@@ -880,6 +995,18 @@ mod tests {
         assert_eq!(links, vec!["char:Aiko"]);
     }
 
+    #[test]
+    fn extract_wiki_links_with_emoji() {
+        let links = extract_wiki_links("Hello 😀 [[target]] and 日本語 [[第二章]] end");
+        assert_eq!(links, vec!["target", "第二章"]);
+    }
+
+    #[test]
+    fn extract_wiki_links_emoji_adjacent() {
+        let links = extract_wiki_links("🎉[[link]]🎊");
+        assert_eq!(links, vec!["link"]);
+    }
+
     // ── title_to_slug ────────────────────────────────────────────────────
 
     #[test]
@@ -912,16 +1039,18 @@ mod tests {
 
     #[test]
     fn dir_manuscript_types() {
-        assert_eq!(node_type_to_dir("chapter"), "manuscript");
-        assert_eq!(node_type_to_dir("scene"), "manuscript");
-        assert_eq!(node_type_to_dir("part"), "manuscript");
+        let dt = default_doc_types();
+        assert_eq!(node_type_to_dir(&dt, "chapter"), "manuscript");
+        assert_eq!(node_type_to_dir(&dt, "scene"), "manuscript");
+        assert_eq!(node_type_to_dir(&dt, "part"), "manuscript");
     }
 
     #[test]
     fn dir_planning_types() {
-        assert_eq!(node_type_to_dir("character"), "kb");
-        assert_eq!(node_type_to_dir("note"), "kb");
-        assert_eq!(node_type_to_dir("research"), "kb");
+        let dt = default_doc_types();
+        assert_eq!(node_type_to_dir(&dt, "character"), "kb");
+        assert_eq!(node_type_to_dir(&dt, "note"), "kb");
+        assert_eq!(node_type_to_dir(&dt, "research"), "kb");
     }
 
     // ── node_type_to_prefix ──────────────────────────────────────────────
@@ -942,16 +1071,18 @@ mod tests {
 
     #[test]
     fn is_manuscript_positive() {
-        assert!(is_manuscript_doc_type("chapter"));
-        assert!(is_manuscript_doc_type("scene"));
-        assert!(is_manuscript_doc_type("part"));
+        let dt = default_doc_types();
+        assert!(is_manuscript_doc_type(&dt, "chapter"));
+        assert!(is_manuscript_doc_type(&dt, "scene"));
+        assert!(is_manuscript_doc_type(&dt, "part"));
     }
 
     #[test]
     fn is_manuscript_negative() {
-        assert!(!is_manuscript_doc_type("character"));
-        assert!(!is_manuscript_doc_type("note"));
-        assert!(!is_manuscript_doc_type("unknown"));
+        let dt = default_doc_types();
+        assert!(!is_manuscript_doc_type(&dt, "character"));
+        assert!(!is_manuscript_doc_type(&dt, "note"));
+        assert!(!is_manuscript_doc_type(&dt, "unknown"));
     }
 
     // ── collect_descendants ──────────────────────────────────────────────
@@ -971,7 +1102,7 @@ mod tests {
             doc_type: None,
             children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes };
+        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes, doc_types: default_doc_types() };
 
         let result = collect_descendants(&manifest, "a");
         assert_eq!(result, vec!["a"]);
@@ -1004,7 +1135,7 @@ mod tests {
             doc_type: None,
             children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes };
+        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes, doc_types: default_doc_types() };
 
         let mut result = collect_descendants(&manifest, "a");
         result.sort();
@@ -1019,7 +1150,7 @@ mod tests {
         nodes.insert("a".to_string(), ProjectNode {
             title: None, file: None, doc_type: None, children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes };
+        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes, doc_types: default_doc_types() };
         assert!(is_ancestor_or_self(&manifest, "a", "a"));
     }
 
@@ -1035,7 +1166,7 @@ mod tests {
         nodes.insert("c".to_string(), ProjectNode {
             title: None, file: None, doc_type: None, children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes };
+        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes, doc_types: default_doc_types() };
         assert!(!is_ancestor_or_self(&manifest, "a", "c"));
     }
 
@@ -1056,7 +1187,7 @@ mod tests {
             created: Some("2026-01-01T00:00:00Z".to_string()),
             modified: None,
         };
-        let raw = write_frontmatter(&fm, "Original content");
+        let raw = write_frontmatter(&fm, "Original content").unwrap();
         fs::write(project.join("manuscript/chap--one.md"), &raw).unwrap();
 
         // Write a manifest
@@ -1077,6 +1208,7 @@ mod tests {
             version: 1,
             root: "node_root".to_string(),
             nodes,
+            doc_types: default_doc_types(),
         };
         save_manifest(&project, &manifest).unwrap();
 
@@ -1160,7 +1292,7 @@ mod tests {
             created: Some("2026-01-01T00:00:00Z".to_string()),
             modified: Some("2026-01-02T00:00:00Z".to_string()),
         };
-        let new_raw = write_frontmatter(&fm, "Modified content");
+        let new_raw = write_frontmatter(&fm, "Modified content").unwrap();
         fs::write(project.join("manuscript/chap--one.md"), &new_raw).unwrap();
 
         // Restore the original backup

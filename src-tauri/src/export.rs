@@ -5,11 +5,28 @@ use printpdf::*;
 use regex::Regex;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
+
+// ── Cached regexes ──────────────────────────────────────────────────────────
+
+static RE_WIKI_LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[\[([^\]]+)\]\]").unwrap());
+static RE_IMG_SIZE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!\[([^\]|]*)\|\d+x\d+\]").unwrap());
+static RE_IMG_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"<img\s+([^>]*?)src="(assets/images/[^"]+)"([^>]*?)>"#).unwrap());
+static RE_IMG_MD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!\[[^\]]*?\]\(([^)]+)\)").unwrap());
+static RE_IMG_STRIP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!\[[^\]]*\]\([^)]*\)").unwrap());
+static RE_LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap());
+static RE_BOLD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\*\*(.+?)\*\*").unwrap());
+static RE_BOLD2: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"__(.+?)__").unwrap());
+static RE_ITALIC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\*(.+?)\*").unwrap());
+static RE_ITALIC2: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|\s)_(.+?)_(?:\s|$)").unwrap());
+static RE_CODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`([^`]+)`").unwrap());
+static RE_HEADING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^#{1,6}\s+").unwrap());
+static RE_HR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^[-*_]{3,}\s*$").unwrap());
 
 // Re-alias the image crate to avoid conflict with printpdf::image module.
 use ::image as img_crate;
 
-use crate::project::{is_manuscript_doc_type, parse_frontmatter, ProjectManifest};
+use crate::project::{is_manuscript_doc_type, parse_frontmatter, DocTypeDefinition, ProjectManifest};
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +35,7 @@ pub struct ManuscriptSegment {
     pub title: String,
     pub doc_type: String,
     pub body: String,
+    pub heading_level: u8,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -69,7 +87,7 @@ fn collect_dfs(
     };
 
     // Skip non-manuscript nodes entirely (planning section)
-    if !is_manuscript_doc_type(doc_type) {
+    if !is_manuscript_doc_type(&manifest.doc_types, doc_type) {
         return;
     }
 
@@ -87,10 +105,12 @@ fn collect_dfs(
                 None => raw,
             };
 
+            let hl = lookup_heading_level(&manifest.doc_types, doc_type);
             segments.push(ManuscriptSegment {
                 title,
                 doc_type: doc_type.to_string(),
                 body: body.trim().to_string(),
+                heading_level: hl,
             });
         }
         // If file missing, skip gracefully
@@ -106,32 +126,30 @@ fn collect_dfs(
 
 /// Strip [[wiki-links]] → plain text
 fn strip_wiki_links(text: &str) -> String {
-    let re = Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
-    re.replace_all(text, "$1").to_string()
+    RE_WIKI_LINK.replace_all(text, "$1").to_string()
 }
 
 /// Strip |WxH from image alt text so comrak sees standard markdown images.
 /// `![alt|400x300](path)` → `![alt](path)`
 fn strip_image_size_syntax(text: &str) -> String {
-    let re = Regex::new(r"!\[([^\]|]*)\|\d+x\d+\]").unwrap();
-    re.replace_all(text, "![$1]").to_string()
+    RE_IMG_SIZE.replace_all(text, "![$1]").to_string()
 }
 
 // ── Heading level by doc type ────────────────────────────────────────────────
 
-fn heading_prefix(doc_type: &str) -> &'static str {
-    match doc_type {
-        "part" => "#",
-        "chapter" => "##",
-        _ => "###", // scene, interlude, snippet
-    }
+fn lookup_heading_level(doc_types: &[DocTypeDefinition], doc_type: &str) -> u8 {
+    doc_types
+        .iter()
+        .find(|dt| dt.id == doc_type)
+        .map(|dt| dt.heading_level)
+        .unwrap_or(3)
 }
 
-fn heading_level(doc_type: &str) -> u8 {
-    match doc_type {
-        "part" => 1,
-        "chapter" => 2,
-        _ => 3,
+fn heading_prefix_for_level(level: u8) -> &'static str {
+    match level {
+        1 => "#",
+        2 => "##",
+        _ => "###",
     }
 }
 
@@ -178,7 +196,7 @@ fn build_toc(segments: &[ManuscriptSegment]) -> Vec<TocEntry> {
         entries.push(TocEntry {
             title: seg.title.clone(),
             anchor,
-            level: heading_level(&seg.doc_type),
+            level: seg.heading_level,
         });
     }
     entries
@@ -204,7 +222,7 @@ pub fn render_markdown(segments: &[ManuscriptSegment]) -> String {
     // Build content sections
     let mut parts: Vec<String> = Vec::new();
     for (i, seg) in segments.iter().enumerate() {
-        let prefix = heading_prefix(&seg.doc_type);
+        let prefix = heading_prefix_for_level(seg.heading_level);
         let heading = format!("{} {}", prefix, seg.title);
 
         // Add anchor target (GitHub-compatible — headings auto-generate anchors,
@@ -232,7 +250,7 @@ pub fn render_html(segments: &[ManuscriptSegment], project_path: &Path) -> Strin
     // 1. Build markdown with anchor IDs on headings
     let mut parts: Vec<String> = Vec::new();
     for (i, seg) in segments.iter().enumerate() {
-        let prefix = heading_prefix(&seg.doc_type);
+        let prefix = heading_prefix_for_level(seg.heading_level);
         // Use explicit anchor + heading so comrak converts to proper HTML
         let anchor = format!("<a id=\"{}\"></a>", toc[i].anchor);
         let heading = format!("{}\n\n{} {}", anchor, prefix, seg.title);
@@ -508,9 +526,7 @@ fn build_html_toc(entries: &[TocEntry]) -> String {
 // ── Image embedding ──────────────────────────────────────────────────────────
 
 fn embed_images(html: &str, project_path: &Path) -> String {
-    let re = Regex::new(r#"<img\s+([^>]*?)src="(assets/images/[^"]+)"([^>]*?)>"#).unwrap();
-
-    re.replace_all(html, |caps: &regex::Captures| {
+    RE_IMG_TAG.replace_all(html, |caps: &regex::Captures| {
         let before = &caps[1];
         let rel_path = &caps[2];
         let after = &caps[3];
@@ -774,11 +790,10 @@ enum ContentBlock {
 /// Split a markdown body into an ordered sequence of text runs and image
 /// references.  Images are detected by `![alt|WxH](path)` or `![alt](path)`.
 fn parse_content_blocks(body: &str) -> Vec<ContentBlock> {
-    let img_re = Regex::new(r"!\[[^\]]*?\]\(([^)]+)\)").unwrap();
     let mut blocks = Vec::new();
     let mut last_end = 0;
 
-    for cap in img_re.captures_iter(body) {
+    for cap in RE_IMG_MD.captures_iter(body) {
         let whole = cap.get(0).unwrap();
 
         // Text before this image
@@ -807,44 +822,25 @@ fn strip_markdown_formatting(text: &str) -> String {
     let mut s = text.to_string();
 
     // Images: ![alt](src) → remove entirely
-    let img_re = Regex::new(r"!\[[^\]]*\]\([^)]*\)").unwrap();
-    s = img_re.replace_all(&s, "").to_string();
-
+    s = RE_IMG_STRIP.replace_all(&s, "").to_string();
     // Links: [text](url) → text
-    let link_re = Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap();
-    s = link_re.replace_all(&s, "$1").to_string();
-
+    s = RE_LINK.replace_all(&s, "$1").to_string();
     // Bold **text** and __text__
-    let bold_re = Regex::new(r"\*\*(.+?)\*\*").unwrap();
-    s = bold_re.replace_all(&s, "$1").to_string();
-    let bold2_re = Regex::new(r"__(.+?)__").unwrap();
-    s = bold2_re.replace_all(&s, "$1").to_string();
-
+    s = RE_BOLD.replace_all(&s, "$1").to_string();
+    s = RE_BOLD2.replace_all(&s, "$1").to_string();
     // Italic *text* and _text_
-    let italic_re = Regex::new(r"\*(.+?)\*").unwrap();
-    s = italic_re.replace_all(&s, "$1").to_string();
-    let italic2_re = Regex::new(r"(?:^|\s)_(.+?)_(?:\s|$)").unwrap();
-    s = italic2_re.replace_all(&s, " $1 ").to_string();
-
+    s = RE_ITALIC.replace_all(&s, "$1").to_string();
+    s = RE_ITALIC2.replace_all(&s, " $1 ").to_string();
     // Inline code `text`
-    let code_re = Regex::new(r"`([^`]+)`").unwrap();
-    s = code_re.replace_all(&s, "$1").to_string();
-
+    s = RE_CODE.replace_all(&s, "$1").to_string();
     // Heading markers
-    let heading_re = Regex::new(r"(?m)^#{1,6}\s+").unwrap();
-    s = heading_re.replace_all(&s, "").to_string();
-
+    s = RE_HEADING.replace_all(&s, "").to_string();
     // Horizontal rules
-    let hr_re = Regex::new(r"(?m)^[-*_]{3,}\s*$").unwrap();
-    s = hr_re.replace_all(&s, "").to_string();
-
+    s = RE_HR.replace_all(&s, "").to_string();
     // Wiki-links [[target]] → target
-    let wiki_re = Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
-    s = wiki_re.replace_all(&s, "$1").to_string();
-
+    s = RE_WIKI_LINK.replace_all(&s, "$1").to_string();
     // Image size syntax (already handled by image strip, but just in case)
-    let img_size_re = Regex::new(r"!\[([^\]|]*)\|\d+x\d+\]").unwrap();
-    s = img_size_re.replace_all(&s, "![$1]").to_string();
+    s = RE_IMG_SIZE.replace_all(&s, "![$1]").to_string();
 
     s
 }
@@ -903,17 +899,17 @@ pub fn render_pdf(
     w.new_page();
 
     for (i, seg) in segments.iter().enumerate() {
-        // Page break before parts and chapters (except the very first segment)
-        if i > 0 && (seg.doc_type == "part" || seg.doc_type == "chapter") {
+        // Page break before H1/H2 headings (except the very first segment)
+        if i > 0 && seg.heading_level <= 2 {
             w.new_page();
         } else if i > 0 {
             w.skip(LINE_H * 2.0);
         }
 
         // Section heading
-        let (size, font) = match seg.doc_type.as_str() {
-            "part" => (H1_SIZE, w.font_bold.clone()),
-            "chapter" => (H2_SIZE, w.font_bold.clone()),
+        let (size, font) = match seg.heading_level {
+            1 => (H1_SIZE, w.font_bold.clone()),
+            2 => (H2_SIZE, w.font_bold.clone()),
             _ => (H3_SIZE, w.font_bold.clone()),
         };
         w.ensure_space(12.0);
@@ -1000,26 +996,21 @@ mod tests {
         assert_eq!(strip_image_size_syntax(input), input);
     }
 
-    // ── heading_prefix ───────────────────────────────────────────────────
+    // ── heading_prefix_for_level ────────────────────────────────────────
 
     #[test]
-    fn heading_prefix_part() {
-        assert_eq!(heading_prefix("part"), "#");
+    fn heading_prefix_level_1() {
+        assert_eq!(heading_prefix_for_level(1), "#");
     }
 
     #[test]
-    fn heading_prefix_chapter() {
-        assert_eq!(heading_prefix("chapter"), "##");
+    fn heading_prefix_level_2() {
+        assert_eq!(heading_prefix_for_level(2), "##");
     }
 
     #[test]
-    fn heading_prefix_scene() {
-        assert_eq!(heading_prefix("scene"), "###");
-    }
-
-    #[test]
-    fn heading_prefix_interlude() {
-        assert_eq!(heading_prefix("interlude"), "###");
+    fn heading_prefix_level_3() {
+        assert_eq!(heading_prefix_for_level(3), "###");
     }
 
     // ── html_escape ──────────────────────────────────────────────────────
@@ -1118,11 +1109,13 @@ mod tests {
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: "Opening paragraph.".to_string(),
+                heading_level: 1,
             },
             ManuscriptSegment {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: "Chapter body with [[Aiko]].".to_string(),
+                heading_level: 2,
             },
         ];
         let md = render_markdown(&segments);
@@ -1139,6 +1132,7 @@ mod tests {
             title: "Empty".to_string(),
             doc_type: "scene".to_string(),
             body: String::new(),
+            heading_level: 3,
         }];
         let md = render_markdown(&segments);
         assert!(md.contains("### Empty"));
@@ -1159,16 +1153,19 @@ mod tests {
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: String::new(),
+                heading_level: 1,
             },
             ManuscriptSegment {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
+                heading_level: 2,
             },
             ManuscriptSegment {
                 title: "Opening".to_string(),
                 doc_type: "scene".to_string(),
                 body: String::new(),
+                heading_level: 3,
             },
         ];
         let toc = build_toc(&segments);
@@ -1187,11 +1184,13 @@ mod tests {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
+                heading_level: 2,
             },
             ManuscriptSegment {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
+                heading_level: 2,
             },
         ];
         let toc = build_toc(&segments);
@@ -1206,11 +1205,13 @@ mod tests {
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: "text".to_string(),
+                heading_level: 1,
             },
             ManuscriptSegment {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: "text".to_string(),
+                heading_level: 2,
             },
         ];
         let md = render_markdown(&segments);
@@ -1226,11 +1227,13 @@ mod tests {
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: String::new(),
+                heading_level: 1,
             },
             ManuscriptSegment {
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
+                heading_level: 2,
             },
         ]);
         let html = build_html_toc(&toc);

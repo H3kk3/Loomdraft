@@ -2,18 +2,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { ProjectManifest, DocumentContent, DocType, ExportResult } from "./types";
+import type { ProjectManifest, DocumentContent, ExportResult } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { Editor } from "./components/Editor";
 import { NewProjectDialog, AddNodeDialog } from "./components/Dialogs";
 import { ExportDialog, type ExportFormat } from "./components/ExportDialog";
 import { SearchPanel } from "./components/SearchPanel";
 import { QuickOpen } from "./components/QuickOpen";
-import { Toast, type ToastData } from "./components/Toast";
+import { ToastStack, createToast, type ToastData } from "./components/Toast";
+import { DocTypeSettings } from "./components/DocTypeSettings";
+import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { useTheme } from "./useTheme";
 import {
-  MANUSCRIPT_DOC_TYPES,
-  PLANNING_DOC_TYPES,
+  getManuscriptDocTypes,
+  getPlanningDocTypes,
   getAllowedChildDocTypes,
   type DocCategory,
 } from "./docTypes";
@@ -65,12 +67,24 @@ function addRecentProject(path: string): void {
   localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, MAX_RECENT_PROJECTS)));
 }
 
+function removeRecentProject(path: string): void {
+  const recent = getRecentProjects().filter((p) => p !== path);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+}
+
 // ── Welcome screen ────────────────────────────────────────────────────────────
+
+function truncatePath(path: string, segments = 3): string {
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length <= segments) return path;
+  return "…/" + parts.slice(-segments).join("/");
+}
 
 function Welcome({
   onNew,
   onOpen,
   onOpenRecent,
+  onRemoveRecent,
   error,
   activeThemeId,
   builtinThemes,
@@ -79,6 +93,7 @@ function Welcome({
   onNew: () => void;
   onOpen: () => void;
   onOpenRecent: (path: string) => void;
+  onRemoveRecent: (path: string) => void;
   error: string | null;
   activeThemeId: string;
   builtinThemes: import("./themes/themeTypes").ThemeMetadata[];
@@ -126,6 +141,7 @@ function Welcome({
           </div>
         )}
       </div>
+      <img src="/logo.png" className="welcome-logo" alt="Loomdraft" draggable={false} />
       <h1 className="welcome-title">Loomdraft</h1>
       <p className="welcome-sub">A writing app for your desktop</p>
       <div className="welcome-actions">
@@ -140,19 +156,52 @@ function Welcome({
         <div className="recent-projects">
           <div className="recent-label">Recent</div>
           {recent.map((path) => (
-            <button
-              key={path}
-              className="recent-item"
-              onClick={() => onOpenRecent(path)}
-              title={path}
-            >
-              {path.split("/").pop() || path}
-              <span className="recent-path">{path}</span>
-            </button>
+            <div key={path} className="recent-item-row">
+              <button
+                className="recent-item"
+                onClick={() => onOpenRecent(path)}
+                title={path}
+              >
+                {path.split("/").pop() || path}
+                <span className="recent-path">{truncatePath(path)}</span>
+              </button>
+              <button
+                className="recent-remove"
+                title="Remove from recent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveRecent(path);
+                }}
+              >
+                &times;
+              </button>
+            </div>
           ))}
         </div>
       )}
       {error && <p className="error-msg">{error}</p>}
+    </div>
+  );
+}
+
+// ── Export progress ──────────────────────────────────────────────────────────
+
+function ExportProgress() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <div className="dialog-backdrop">
+      <div className="export-loading">
+        <div className="export-spinner" />
+        <span>Exporting manuscript…</span>
+        {elapsed >= 2 && (
+          <span className="export-elapsed">{elapsed}s</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -190,12 +239,19 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showQuickOpen, setShowQuickOpen] = useState(false);
-  const [toast, setToast] = useState<ToastData | null>(null);
+  const [showDocTypeSettings, setShowDocTypeSettings] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [, setRecentKey] = useState(0);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
   const selectedNodeIdRef = useRef<string | null>(null);
   const projectPathRef = useRef<string | null>(null);
 
   const showToast = useCallback((message: string, type: ToastData["type"] = "success") => {
-    setToast({ message, type });
+    setToasts((prev) => [...prev, createToast(message, type)]);
+  }, []);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   // ── Theme/font operations with toast notifications ──────────────────────
@@ -239,6 +295,10 @@ export default function App() {
         e.preventDefault();
         if (projectPath && manifest) setShowQuickOpen((v) => !v);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+        e.preventDefault();
+        setShowShortcuts((v) => !v);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -246,8 +306,7 @@ export default function App() {
 
   // ── Auto-save on window close ──────────────────────────────────────────
   // The Editor component handles save-on-unmount, but we also hook the Tauri
-  // close event to ensure React's unmount cycle completes before the window
-  // is destroyed.
+  // close event to ensure React's unmount cycle completes before the app quits.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     getCurrentWindow()
@@ -256,7 +315,8 @@ export default function App() {
         event.preventDefault();
         // Small delay to let Editor's cleanup effect fire
         await new Promise((r) => setTimeout(r, 150));
-        await getCurrentWindow().destroy();
+        // Quit the entire process (not just destroy the window)
+        await invoke("quit_app");
       })
       .then((fn) => {
         unlisten = fn;
@@ -355,20 +415,21 @@ export default function App() {
 
   // ── Node management ──────────────────────────────────────────────────────
 
-  const handleAddConfirm = async (title: string, docType: DocType) => {
-    if (!projectPath || !addingUnder) return;
+  const handleAddConfirm = async (title: string, docType: string) => {
+    if (!projectPath || !addingUnder || !manifest) return;
     const target = addingUnder;
     setAddingUnder(null);
 
-    const parentDocType = manifest?.nodes[target.parentId]?.doc_type;
+    const dt = manifest.doc_types;
+    const parentDocType = manifest.nodes[target.parentId]?.doc_type;
     const allowedDocTypes =
       target.category === "manuscript"
-        ? MANUSCRIPT_DOC_TYPES
+        ? getManuscriptDocTypes(dt)
         : target.category === "planning"
-          ? PLANNING_DOC_TYPES
-          : getAllowedChildDocTypes(parentDocType);
-    if (!allowedDocTypes.includes(docType)) {
-      setError(`Cannot create a ${docType} document under this parent`);
+          ? getPlanningDocTypes(dt)
+          : getAllowedChildDocTypes(dt, parentDocType);
+    if (!allowedDocTypes.some((d) => d.id === docType)) {
+      showToast(`Cannot create a ${docType} document under this parent`, "error");
       return;
     }
 
@@ -428,7 +489,7 @@ export default function App() {
       });
       setManifest(refreshed);
     } catch (e) {
-      setError(`Move failed: ${String(e)}`);
+      showToast(`Move failed: ${String(e)}`, "error");
     }
   };
 
@@ -496,6 +557,10 @@ export default function App() {
           }}
           onOpen={handleOpenProject}
           onOpenRecent={openProjectByPath}
+          onRemoveRecent={(path) => {
+            removeRecentProject(path);
+            setRecentKey((k) => k + 1);
+          }}
           error={error}
           activeThemeId={activeThemeId}
           builtinThemes={builtinThemes}
@@ -525,6 +590,7 @@ export default function App() {
           onExport={() => setShowExportDialog(true)}
           onClose={handleCloseProject}
           onSearch={() => setShowSearch(true)}
+          onDocTypeSettings={() => setShowDocTypeSettings(true)}
           theme={theme}
           onToggleTheme={toggleTheme}
           activeThemeId={activeThemeId}
@@ -565,13 +631,15 @@ export default function App() {
             projectPath={projectPath ?? undefined}
             onDistractionFreeChange={setEditorDistractionFree}
             activeTheme={activeTheme}
+            onToast={showToast}
+            breadcrumbTitle={document.title}
           />
         ) : (
           <div className="empty-state">
             <div className="empty-state-content">
               <p className="empty-state-title">No document selected</p>
               <p className="empty-state-subtitle">
-                Select a document from the sidebar, or add one with +
+                Select a document from the sidebar, or click + next to Manuscript to add your first chapter
               </p>
               <div className="empty-state-shortcuts">
                 <div className="shortcut-row">
@@ -594,11 +662,22 @@ export default function App() {
                   <kbd>Ctrl+Alt+F</kbd>
                   <span>Focus mode</span>
                 </div>
+                <div className="shortcut-row">
+                  <kbd>Ctrl+/</kbd>
+                  <span>All keyboard shortcuts</span>
+                </div>
               </div>
             </div>
           </div>
         )}
-        {error && <div className="error-banner">{error}</div>}
+        {error && (
+          <div className="error-banner">
+            {error}
+            <button className="error-dismiss" onClick={() => setError(null)}>
+              &times;
+            </button>
+          </div>
+        )}
       </main>
 
       {addingUnder && manifest.nodes[addingUnder.parentId] && (
@@ -612,10 +691,10 @@ export default function App() {
           }
           allowedDocTypes={
             addingUnder.category === "manuscript"
-              ? MANUSCRIPT_DOC_TYPES
+              ? getManuscriptDocTypes(manifest.doc_types)
               : addingUnder.category === "planning"
-                ? PLANNING_DOC_TYPES
-                : getAllowedChildDocTypes(manifest.nodes[addingUnder.parentId].doc_type)
+                ? getPlanningDocTypes(manifest.doc_types)
+                : getAllowedChildDocTypes(manifest.doc_types, manifest.nodes[addingUnder.parentId].doc_type)
           }
           onConfirm={handleAddConfirm}
           onCancel={() => setAddingUnder(null)}
@@ -630,18 +709,12 @@ export default function App() {
         />
       )}
 
-      {exporting && (
-        <div className="dialog-backdrop">
-          <div className="export-loading">
-            <div className="export-spinner" />
-            <span>Exporting manuscript…</span>
-          </div>
-        </div>
-      )}
+      {exporting && <ExportProgress />}
 
       {showSearch && projectPath && (
         <SearchPanel
           projectPath={projectPath}
+          docTypes={manifest?.doc_types ?? []}
           onSelectNode={handleSelectNode}
           onClose={() => setShowSearch(false)}
         />
@@ -655,7 +728,27 @@ export default function App() {
         />
       )}
 
-      {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}
+      {showDocTypeSettings && manifest && projectPath && (
+        <DocTypeSettings
+          projectPath={projectPath}
+          docTypes={manifest.doc_types}
+          nodeCounts={(() => {
+            const counts: Record<string, number> = {};
+            for (const node of Object.values(manifest.nodes)) {
+              if (node.doc_type) counts[node.doc_type] = (counts[node.doc_type] ?? 0) + 1;
+            }
+            return counts;
+          })()}
+          onUpdated={(docTypes) => {
+            setManifest((m) => (m ? { ...m, doc_types: docTypes } : m));
+          }}
+          onClose={() => setShowDocTypeSettings(false)}
+        />
+      )}
+
+      {showShortcuts && <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />}
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

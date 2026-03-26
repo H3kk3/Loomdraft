@@ -44,6 +44,8 @@ interface EditorProps {
   projectPath?: string;
   onDistractionFreeChange?: (enabled: boolean) => void;
   activeTheme?: ThemeDefinition;
+  onToast?: (message: string, type: "success" | "error" | "info" | "warning") => void;
+  breadcrumbTitle?: string;
 }
 
 // ── Editor ────────────────────────────────────────────────────────────────────
@@ -56,6 +58,8 @@ export function Editor({
   projectPath,
   onDistractionFreeChange,
   activeTheme,
+  onToast,
+  breadcrumbTitle,
 }: EditorProps) {
   const [content, setContent] = useState(doc.content);
   const [activeImage, setActiveImage] = useState<ActiveImage | null>(null);
@@ -179,6 +183,8 @@ export function Editor({
             .then((r) => setManuscriptWordCount({ words: r.total_words, chars: r.total_chars }))
             .catch(() => {});
         }
+      } else if (!ok) {
+        onToast?.("Failed to save — retrying on next autosave", "error");
       }
     } finally {
       saveInFlightRef.current = false;
@@ -331,7 +337,7 @@ export function Editor({
     view.dispatch({
       effects: wrapCompartment.current.reconfigure(softWrap ? EditorView.lineWrapping : []),
     });
-  }, [softWrap, viewRef]);
+  }, [softWrap, viewRef, doc.id]);
 
   // ── Reconfigure facets when props change ─────────────────────────────────
   useEffect(() => {
@@ -360,7 +366,7 @@ export function Editor({
         onImageClickFacet.of((img: ActiveImage) => setActiveImage(img)),
       ),
     });
-  }, [viewRef]);
+  }, [viewRef, doc.id]);
 
   // ── Typewriter mode toggle ──────────────────────────────────────────────
   useEffect(() => {
@@ -371,7 +377,7 @@ export function Editor({
         typewriterMode ? typewriterExtension() : [],
       ),
     });
-  }, [typewriterMode, viewRef]);
+  }, [typewriterMode, viewRef, doc.id]);
 
   // ── Focus mode toggle ────────────────────────────────────────────────────
   useEffect(() => {
@@ -380,7 +386,7 @@ export function Editor({
     view.dispatch({
       effects: focusModeCompartment.current.reconfigure(focusMode ? focusModeExtension() : []),
     });
-  }, [focusMode, viewRef]);
+  }, [focusMode, viewRef, doc.id]);
 
   // ── Spell-check toggle ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -394,7 +400,7 @@ export function Editor({
     } catch {
       /* noop */
     }
-  }, [spellCheck, viewRef]);
+  }, [spellCheck, viewRef, doc.id]);
 
   // ── Manuscript mode toggle ──────────────────────────────────────────────────
   useEffect(() => {
@@ -408,7 +414,7 @@ export function Editor({
     } catch {
       /* noop */
     }
-  }, [manuscriptMode, viewRef]);
+  }, [manuscriptMode, viewRef, doc.id]);
 
   // ── Syntax highlighting (reconfigure on theme change) ──────────────────────
   useEffect(() => {
@@ -419,7 +425,7 @@ export function Editor({
         createSyntaxHighlighting(activeTheme.syntax, activeTheme.colors),
       ),
     });
-  }, [activeTheme, viewRef]);
+  }, [activeTheme, viewRef, doc.id]);
 
   // ── Link hover preview ─────────────────────────────────────────────────────
   const handleLinkHover = useCallback((link: HoveredLink | null) => {
@@ -447,7 +453,7 @@ export function Editor({
     view.dispatch({
       effects: linkHoverCompartment.current.reconfigure(onLinkHoverFacet.of(handleLinkHover)),
     });
-  }, [handleLinkHover, viewRef]);
+  }, [handleLinkHover, viewRef, doc.id]);
 
   // Fetch preview content when hovered link changes
   useEffect(() => {
@@ -480,6 +486,10 @@ export function Editor({
 
   // Reset link hover on doc switch
   useEffect(() => {
+    if (linkDismissTimer.current !== null) {
+      window.clearTimeout(linkDismissTimer.current);
+      linkDismissTimer.current = null;
+    }
     setHoveredLink(null);
     setLinkPreview(null);
   }, [doc.id]);
@@ -628,9 +638,12 @@ export function Editor({
           <span className="editor-meta">
             {doc.doc_type} · {doc.file}
           </span>
-          {isSaving && <span className="editor-meta editor-status">Saving…</span>}
-          {!isSaving && lastSavedLabel && (
-            <span className="editor-meta editor-status">Saved at {lastSavedLabel}</span>
+          {isSaving && <span className="editor-meta editor-status saving">Saving…</span>}
+          {!isSaving && dirty && (
+            <span className="editor-meta editor-status unsaved">Unsaved changes</span>
+          )}
+          {!isSaving && !dirty && lastSavedLabel && (
+            <span className="editor-meta editor-status saved">Saved at {lastSavedLabel}</span>
           )}
           {projectPath && (
             <button
@@ -681,9 +694,15 @@ export function Editor({
 
       {distractionFree && (
         <div className="df-controls">
-          {isSaving && <span className="editor-meta editor-status">Saving…</span>}
-          {!isSaving && lastSavedLabel && (
-            <span className="editor-meta editor-status">Saved at {lastSavedLabel}</span>
+          {breadcrumbTitle && (
+            <span className="df-breadcrumb">{breadcrumbTitle}</span>
+          )}
+          {isSaving && <span className="editor-meta editor-status saving">Saving…</span>}
+          {!isSaving && dirty && (
+            <span className="editor-meta editor-status unsaved">Unsaved changes</span>
+          )}
+          {!isSaving && !dirty && lastSavedLabel && (
+            <span className="editor-meta editor-status saved">Saved at {lastSavedLabel}</span>
           )}
           <button className="toolbar-btn" onClick={() => setShowOutline((v) => !v)}>
             Outline
@@ -703,28 +722,32 @@ export function Editor({
         </div>
       )}
 
-      <div className={`editor-shell${isDraggingOver ? " drag-over" : ""}`}>
-        {showOutline && (
-          <div className="outline-popover" ref={outlinePopoverRef}>
-            <div className="outline-popover-title">Headings</div>
-            <div className="outline-popover-list">
-              {outlineEntries.length ? (
-                outlineEntries.map((entry) => (
-                  <button
-                    key={`${entry.offset}-${entry.line}`}
-                    className={`outline-item level-${entry.level}`}
-                    onClick={() => jumpToHeading(entry.offset)}
-                  >
-                    <span className="outline-item-title">{entry.title}</span>
-                    <span className="outline-item-line">L{entry.line}</span>
-                  </button>
-                ))
-              ) : (
-                <div className="outline-empty">No H1-H3 headings in this document</div>
-              )}
+      <div className="editor-body">
+        <div className={`editor-shell${isDraggingOver ? " drag-over" : ""}`}>
+          {showOutline && (
+            <div className="outline-popover" ref={outlinePopoverRef}>
+              <div className="outline-popover-title">Headings</div>
+              <div className="outline-popover-list">
+                {outlineEntries.length ? (
+                  outlineEntries.map((entry) => (
+                    <button
+                      key={`${entry.offset}-${entry.line}`}
+                      className={`outline-item level-${entry.level}`}
+                      onClick={() => jumpToHeading(entry.offset)}
+                    >
+                      <span className="outline-item-title">{entry.title}</span>
+                      <span className="outline-item-line">L{entry.line}</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="outline-empty">No H1-H3 headings in this document</div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          <div ref={editorContainerRef} className="cm-editor-container" />
+        </div>
 
         {showHistory && projectPath && (
           <VersionHistory
@@ -734,8 +757,6 @@ export function Editor({
             onClose={() => setShowHistory(false)}
           />
         )}
-
-        <div ref={editorContainerRef} className="cm-editor-container" />
       </div>
 
       {/* Wiki-link hover preview card */}

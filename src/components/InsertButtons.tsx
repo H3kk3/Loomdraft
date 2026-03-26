@@ -22,23 +22,44 @@ export function LinkPickerButton({ viewRef, manifest }: LinkPickerButtonProps) {
   const [linkRange, setLinkRange] = useState<{ start: number; end: number } | null>(null);
   const [linkActiveIdx, setLinkActiveIdx] = useState(0);
 
-  const internalLinkTitles = useMemo(() => {
+  const internalLinkItems = useMemo(() => {
     if (!manifest) return [];
-    const titles = new Set<string>();
+    const items: { title: string; docType?: string }[] = [];
     for (const node of Object.values(manifest.nodes)) {
       const title = node.title?.trim();
-      if (title) titles.add(title);
+      if (title) items.push({ title, docType: node.doc_type });
     }
-    return Array.from(titles).sort((a, b) => a.localeCompare(b));
+    // Deduplicate by title, keep first occurrence
+    const seen = new Set<string>();
+    return items
+      .filter((item) => {
+        if (seen.has(item.title)) return false;
+        seen.add(item.title);
+        return true;
+      })
+      .sort((a, b) => a.title.localeCompare(b.title));
   }, [manifest]);
 
-  const filteredLinkTitles = useMemo(() => {
+  const totalMatches = useMemo(() => {
+    const query = linkQuery.trim().toLowerCase();
+    return query
+      ? internalLinkItems.filter((item) => item.title.toLowerCase().includes(query)).length
+      : internalLinkItems.length;
+  }, [internalLinkItems, linkQuery]);
+
+  const filteredLinkItems = useMemo(() => {
     const query = linkQuery.trim().toLowerCase();
     const base = query
-      ? internalLinkTitles.filter((title) => title.toLowerCase().includes(query))
-      : internalLinkTitles;
-    return base.slice(0, 8);
-  }, [internalLinkTitles, linkQuery]);
+      ? internalLinkItems.filter((item) => item.title.toLowerCase().includes(query))
+      : internalLinkItems;
+    return base.slice(0, 20);
+  }, [internalLinkItems, linkQuery]);
+
+  // Keep backward-compatible title array for keyboard handling
+  const filteredLinkTitles = useMemo(
+    () => filteredLinkItems.map((item) => item.title),
+    [filteredLinkItems],
+  );
 
   useEffect(() => {
     if (!showLinkPicker) return;
@@ -162,20 +183,28 @@ export function LinkPickerButton({ viewRef, manifest }: LinkPickerButtonProps) {
             }}
           />
           <div className="link-picker-list">
-            {filteredLinkTitles.map((title, idx) => (
+            {filteredLinkItems.map((item, idx) => (
               <button
-                key={title}
+                key={item.title}
                 className={`link-picker-item${idx === linkActiveIdx ? " active" : ""}`}
                 onMouseDown={keepFocus}
                 onMouseEnter={() => setLinkActiveIdx(idx)}
-                onClick={() => applyInternalLink(title)}
+                onClick={() => applyInternalLink(item.title)}
               >
-                {title}
+                <span className="link-picker-item-title">{item.title}</span>
+                {item.docType && (
+                  <span className="link-picker-item-type">{item.docType}</span>
+                )}
               </button>
             ))}
-            {!filteredLinkTitles.length && (
+            {!filteredLinkItems.length && (
               <div className="link-picker-empty">
                 No matches. Press Enter to insert typed title.
+              </div>
+            )}
+            {totalMatches > filteredLinkItems.length && (
+              <div className="link-picker-count">
+                Showing {filteredLinkItems.length} of {totalMatches}
               </div>
             )}
           </div>

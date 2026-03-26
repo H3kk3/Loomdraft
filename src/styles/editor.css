@@ -7,7 +7,7 @@
   min-height: 0;
 }
 
-.editor.distraction-free .editor-shell {
+.editor.distraction-free .editor-body {
   flex: 1;
 }
 
@@ -35,6 +35,18 @@
   color: var(--accent-h);
 }
 
+.editor-status.saved {
+  color: #2d8a4e;
+}
+
+.editor-status.unsaved {
+  color: var(--accent-h);
+}
+
+.editor-status.saving {
+  color: var(--text-dim);
+}
+
 .save-btn {
   margin-left: auto;
   background: var(--accent);
@@ -42,6 +54,14 @@
   color: #fff;
   padding: 3px 12px;
   font-size: 12px;
+}
+
+/* ── Editor body (flex row: shell + version history) ─────────────────────── */
+
+.editor-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ── Editor shell ─────────────────────────────────────────────────────────── */
@@ -80,7 +100,8 @@
   top: 10px;
   right: 12px;
   width: 310px;
-  max-height: min(60vh, 460px);
+  max-height: min(calc(100vh - 80px), 460px);
+  overflow-y: auto;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -194,7 +215,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 300;
+  z-index: 600;
 }
 
 .lpc-header {
@@ -266,6 +287,21 @@
   border-radius: var(--radius);
   padding: 5px 6px;
   backdrop-filter: blur(4px);
+}
+
+.df-breadcrumb {
+  font-size: 12px;
+  color: var(--text-dim);
+  opacity: 0.4;
+  transition: opacity 0.15s;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.df-breadcrumb:hover {
+  opacity: 0.8;
 }
 
 /* ── Editor status bar (word count) ───────────────────────────────────────── */

@@ -7,10 +7,20 @@ export interface ProjectNode {
   children: string[];
 }
 
+export interface DocTypeDefinition {
+  id: string;
+  label: string;
+  category: "manuscript" | "planning";
+  icon: string;
+  heading_level: number;
+  builtin: boolean;
+}
+
 export interface ProjectManifest {
   version: number;
   root: string;
   nodes: Record<string, ProjectNode>;
+  doc_types: DocTypeDefinition[];
 }
 
 export interface DocumentContent {
@@ -48,20 +58,4 @@ export interface BackupEntry {
   preview: string;
 }
 
-export type DocType =
-  // Compile-able / Manuscript types
-  | "part"
-  | "chapter"
-  | "scene"
-  | "interlude"
-  | "snippet"
-  // Planning & Reference types
-  | "character"
-  | "location"
-  | "item"
-  | "organization"
-  | "event"
-  | "lore"
-  | "outline"
-  | "research"
-  | "note";
+export type DocType = string;

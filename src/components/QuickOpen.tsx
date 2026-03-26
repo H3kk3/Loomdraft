@@ -118,7 +118,7 @@ export function QuickOpen({ manifest, onSelectNode, onClose }: QuickOpenProps) {
               onMouseEnter={() => setActiveIdx(i)}
             >
               <span className="search-result-icon">
-                <DocTypeIcon docType={entry.docType} />
+                <DocTypeIcon docType={entry.docType} docTypes={manifest.doc_types} />
               </span>
               <span className="search-result-title">{entry.title}</span>
               <span className="search-result-type">{entry.docType}</span>

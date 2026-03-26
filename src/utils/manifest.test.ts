@@ -9,6 +9,7 @@ function makeManifest(
     version: 1,
     root: "root",
     nodes: {},
+    doc_types: [],
   };
   for (const [id, n] of Object.entries(nodes)) {
     built.nodes[id] = {
