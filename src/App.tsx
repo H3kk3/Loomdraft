@@ -20,6 +20,7 @@ import {
   type DocCategory,
 } from "./docTypes";
 import { MAX_RECENT_PROJECTS } from "./constants";
+import logoUrl from "./assets/logo.png";
 import "./App.css";
 
 // ── Breadcrumb helper ────────────────────────────────────────────────────────
@@ -141,7 +142,7 @@ function Welcome({
           </div>
         )}
       </div>
-      <img src="/logo.png" className="welcome-logo" alt="Loomdraft" draggable={false} />
+      <img src={logoUrl} className="welcome-logo" alt="Loomdraft" draggable={false} />
       <h1 className="welcome-title">Loomdraft</h1>
       <p className="welcome-sub">A writing app for your desktop</p>
       <div className="welcome-actions">
