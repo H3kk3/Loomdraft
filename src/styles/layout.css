@@ -134,7 +134,32 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 14px;
+  position: relative;
+}
+
+/* ── Logo ─────────────────────────────────────────────────────────────────── */
+
+.welcome-logo {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 40%, transparent))
+          drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+  animation: welcome-logo-in 0.6s ease-out both;
+  user-select: none;
+  pointer-events: none;
+}
+
+@keyframes welcome-logo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .welcome-theme-area {
@@ -197,21 +222,35 @@
 }
 
 .welcome-title {
-  font-size: 40px;
+  font-size: 36px;
   font-weight: 700;
-  letter-spacing: -1px;
+  letter-spacing: 0.5px;
   color: var(--text);
+  animation: welcome-fade-in 0.5s ease-out 0.15s both;
 }
 
 .welcome-sub {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-dim);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  animation: welcome-fade-in 0.5s ease-out 0.25s both;
 }
 
 .welcome-actions {
   display: flex;
   gap: 12px;
+  animation: welcome-fade-in 0.5s ease-out 0.35s both;
+}
+
+@keyframes welcome-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Recent projects ──────────────────────────────────────────────────────── */

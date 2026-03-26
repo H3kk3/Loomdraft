@@ -561,6 +561,13 @@ fn delete_font(app: tauri::AppHandle, filename: String) -> CmdResult<()> {
     Ok(theme::delete_font(&dir, &filename)?)
 }
 
+// ── App lifecycle ────────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 // ── App entry point ───────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -601,6 +608,7 @@ pub fn run() {
             list_fonts,
             read_font_base64,
             delete_font,
+            quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

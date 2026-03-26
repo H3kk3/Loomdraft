@@ -141,6 +141,7 @@ function Welcome({
           </div>
         )}
       </div>
+      <img src="/logo.png" className="welcome-logo" alt="Loomdraft" draggable={false} />
       <h1 className="welcome-title">Loomdraft</h1>
       <p className="welcome-sub">A writing app for your desktop</p>
       <div className="welcome-actions">
@@ -305,8 +306,7 @@ export default function App() {
 
   // ── Auto-save on window close ──────────────────────────────────────────
   // The Editor component handles save-on-unmount, but we also hook the Tauri
-  // close event to ensure React's unmount cycle completes before the window
-  // is destroyed.
+  // close event to ensure React's unmount cycle completes before the app quits.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     getCurrentWindow()
@@ -315,7 +315,8 @@ export default function App() {
         event.preventDefault();
         // Small delay to let Editor's cleanup effect fire
         await new Promise((r) => setTimeout(r, 150));
-        await getCurrentWindow().destroy();
+        // Quit the entire process (not just destroy the window)
+        await invoke("quit_app");
       })
       .then((fn) => {
         unlisten = fn;
