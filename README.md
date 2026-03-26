@@ -269,4 +269,4 @@ The rain hammered against the window as she reached for the door handle...
 
 ## License
 
-<!-- Add your license here -->
+[MIT License](LICENSE)
