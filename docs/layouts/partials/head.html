@@ -2,6 +2,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ .Site.Title }}</title>
 <meta name="description" content="{{ .Site.Params.description }}">
+<meta name="author" content="Hekke">
+<meta name="keywords" content="writing app, novel writing, distraction-free, desktop app, local-first, creative writing, manuscript, novelist, screenwriter, tauri">
+<meta name="theme-color" content="#1a1625">
+<link rel="canonical" href="{{ .Permalink }}">
 
 <!-- Open Graph -->
 <meta property="og:title" content="{{ .Site.Title }}">
@@ -9,11 +13,32 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ .Site.BaseURL }}">
 <meta property="og:image" content="{{ .Site.BaseURL }}images/og-image.png">
+<meta property="og:site_name" content="Loomdraft">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{ .Site.Title }}">
 <meta name="twitter:description" content="{{ .Site.Params.description }}">
+<meta name="twitter:image" content="{{ .Site.BaseURL }}images/og-image.png">
+
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Loomdraft",
+  "description": "{{ .Site.Params.description }}",
+  "applicationCategory": "Productivity",
+  "operatingSystem": "macOS, Windows, Linux",
+  "url": "{{ .Site.BaseURL }}",
+  "license": "https://opensource.org/licenses/MIT",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
 
 <!-- Favicon -->
 <link rel="icon" type="image/svg+xml" href="{{ "images/logo.svg" | relURL }}">
