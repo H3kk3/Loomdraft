@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://h3kk3.github.io/Loomdraft/sitemap.xml
