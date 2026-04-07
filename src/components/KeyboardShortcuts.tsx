@@ -1,7 +1,5 @@
 import { useEffect, useRef } from "react";
-
-const isMac = navigator.platform.toUpperCase().includes("MAC");
-const mod = isMac ? "Cmd" : "Ctrl";
+import { mod } from "../utils/platform";
 
 interface Shortcut {
   keys: string;

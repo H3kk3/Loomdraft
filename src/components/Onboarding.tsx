@@ -9,13 +9,10 @@ import {
   FileText,
   Palette,
 } from "lucide-react";
+import { mod } from "../utils/platform";
 import logoUrl from "../assets/logo.png";
 
-const TOTAL_STEPS = 8;
 const EXIT_DURATION = 400;
-
-const isMac = navigator.platform.toUpperCase().includes("MAC");
-const mod = isMac ? "Cmd" : "Ctrl";
 
 // ── Step Components ──────────────────────────────────────────────────────────
 
@@ -160,11 +157,11 @@ function StepModes() {
           <span className="mode-name">Typewriter</span>
           <span className="mode-desc">Keeps your cursor centered on screen</span>
           <div className="mode-mini-preview typewriter">
-            <div className="mini-line" style={{ width: "70%" }} />
-            <div className="mini-line" style={{ width: "85%" }} />
-            <div className="mini-line" style={{ width: "60%" }} />
-            <div className="mini-line" style={{ width: "90%" }} />
-            <div className="mini-line" style={{ width: "45%" }} />
+            <div className="mini-line" />
+            <div className="mini-line" />
+            <div className="mini-line" />
+            <div className="mini-line" />
+            <div className="mini-line" />
           </div>
           <span className="onboarding-shortcut-badge">{mod}+Alt+T</span>
         </div>
@@ -173,11 +170,11 @@ function StepModes() {
           <span className="mode-name">Focus</span>
           <span className="mode-desc">Dims everything but your current line</span>
           <div className="mode-mini-preview focus">
-            <div className="mini-line" style={{ width: "70%" }} />
-            <div className="mini-line" style={{ width: "85%" }} />
-            <div className="mini-line" style={{ width: "60%" }} />
-            <div className="mini-line" style={{ width: "90%" }} />
-            <div className="mini-line" style={{ width: "45%" }} />
+            <div className="mini-line" />
+            <div className="mini-line" />
+            <div className="mini-line" />
+            <div className="mini-line" />
+            <div className="mini-line" />
           </div>
           <span className="onboarding-shortcut-badge">{mod}+Alt+F</span>
         </div>
@@ -186,11 +183,11 @@ function StepModes() {
           <span className="mode-name">Distraction-free</span>
           <span className="mode-desc">Full screen, nothing but your words</span>
           <div className="mode-mini-preview distraction-free">
-            <div className="mini-line" style={{ width: "70%" }} />
-            <div className="mini-line" style={{ width: "85%" }} />
-            <div className="mini-line" style={{ width: "60%" }} />
-            <div className="mini-line" style={{ width: "90%" }} />
-            <div className="mini-line" style={{ width: "45%" }} />
+            <div className="mini-line" />
+            <div className="mini-line" />
+            <div className="mini-line" />
+            <div className="mini-line" />
+            <div className="mini-line" />
           </div>
           <span className="onboarding-shortcut-badge">{mod}+Shift+D</span>
         </div>
@@ -291,6 +288,7 @@ const STEPS = [
   StepShortcuts,
   StepFinal,
 ];
+const TOTAL_STEPS = STEPS.length;
 
 // ── Main Component ───────────────────────────────────────────────────────────
 
@@ -298,20 +296,23 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
   const [displayedStep, setDisplayedStep] = useState(0);
   const [exiting, setExiting] = useState(false);
+  const exitingRef = useRef(false);
   const exitTimeout = useRef<number | null>(null);
 
   const goTo = useCallback(
     (target: number) => {
-      if (exiting) return;
+      if (exitingRef.current) return;
       if (target < 0 || target >= TOTAL_STEPS) return;
+      exitingRef.current = true;
       setExiting(true);
       exitTimeout.current = window.setTimeout(() => {
         setDisplayedStep(target);
         setStep(target);
+        exitingRef.current = false;
         setExiting(false);
       }, EXIT_DURATION);
     },
-    [exiting],
+    [],
   );
 
   const next = useCallback(() => {
@@ -329,7 +330,11 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight" || e.key === "Enter") {
+      // Ignore Enter on buttons — the button's onClick already handles it
+      if (
+        e.key === "ArrowRight" ||
+        (e.key === "Enter" && !(e.target instanceof HTMLButtonElement))
+      ) {
         e.preventDefault();
         next();
       } else if (e.key === "ArrowLeft") {

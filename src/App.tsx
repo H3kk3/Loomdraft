@@ -21,11 +21,9 @@ import {
   type DocCategory,
 } from "./docTypes";
 import { MAX_RECENT_PROJECTS } from "./constants";
+import { mod } from "./utils/platform";
 import logoUrl from "./assets/logo.png";
 import "./App.css";
-
-const isMac = navigator.platform.toUpperCase().includes("MAC");
-const mod = isMac ? "Cmd" : "Ctrl";
 
 // ── Breadcrumb helper ────────────────────────────────────────────────────────
 

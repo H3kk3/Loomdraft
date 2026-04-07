@@ -5,9 +5,7 @@ import type { ProjectManifest } from "../types";
 import { keepFocus } from "./toolbarHelpers";
 import { FormattingButtons } from "./FormattingButtons";
 import { LinkPickerButton, ImageInsertButton } from "./InsertButtons";
-
-const isMac = navigator.platform.toUpperCase().includes("MAC");
-const mod = isMac ? "Cmd" : "Ctrl";
+import { mod } from "../utils/platform";
 
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 

@@ -52,9 +52,7 @@ import { DRAG_THRESHOLD_PX } from "../constants";
 import { TreeNode, type DropTarget, type DropPos } from "./TreeNode";
 import { ContextMenu } from "./ContextMenu";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
-
-const isMac = navigator.platform.toUpperCase().includes("MAC");
-const mod = isMac ? "Cmd" : "Ctrl";
+import { mod } from "../utils/platform";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
