@@ -1,0 +1,641 @@
+/* ── Onboarding ────────────────────────────────────────────────────────────── */
+
+.onboarding-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  background: color-mix(in srgb, var(--bg) 92%, var(--accent) 8%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* ── Grain overlay ─────────────────────────────────────────────────────────── */
+
+.onboarding-grain {
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  opacity: 0.03;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  animation: grain-drift 8s linear infinite;
+}
+
+@keyframes grain-drift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(128px, 128px); }
+}
+
+/* ── Skip button ───────────────────────────────────────────────────────────── */
+
+.onboarding-skip {
+  position: absolute;
+  top: 28px;
+  right: 32px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  transition: color 0.2s;
+  z-index: 2;
+  letter-spacing: 0.02em;
+}
+.onboarding-skip:hover {
+  color: var(--text);
+  background: none;
+  border-color: transparent;
+}
+
+/* ── Container ─────────────────────────────────────────────────────────────── */
+
+.onboarding-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 600px;
+  padding: 0 32px;
+  z-index: 1;
+}
+
+/* ── Step wrapper with transition ──────────────────────────────────────────── */
+
+.onboarding-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  animation: step-enter 600ms ease-out both;
+}
+
+.onboarding-step.exiting {
+  animation: step-exit 400ms ease-in both;
+}
+
+@keyframes step-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes step-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+/* ── Staggered reveal ──────────────────────────────────────────────────────── */
+
+.onboarding-reveal > *:nth-child(1) { animation-delay: 0s; }
+.onboarding-reveal > *:nth-child(2) { animation-delay: 0.1s; }
+.onboarding-reveal > *:nth-child(3) { animation-delay: 0.2s; }
+.onboarding-reveal > *:nth-child(4) { animation-delay: 0.3s; }
+.onboarding-reveal > *:nth-child(5) { animation-delay: 0.4s; }
+.onboarding-reveal > *:nth-child(6) { animation-delay: 0.5s; }
+.onboarding-reveal > *:nth-child(7) { animation-delay: 0.6s; }
+
+.onboarding-reveal > * {
+  animation: reveal-in 500ms ease-out both;
+}
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Typography ────────────────────────────────────────────────────────────── */
+
+.onboarding-title {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.onboarding-subtitle {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 420px;
+  letter-spacing: 0.01em;
+}
+
+.onboarding-body {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 440px;
+  margin-top: 8px;
+}
+
+/* ── Welcome step ──────────────────────────────────────────────────────────── */
+
+.onboarding-logo {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 24px;
+  animation: logo-breathe 3s ease-in-out infinite;
+}
+
+@keyframes logo-breathe {
+  0%, 100% { filter: drop-shadow(0 0 0px transparent); }
+  50% { filter: drop-shadow(0 0 20px color-mix(in srgb, var(--accent) 30%, transparent)); }
+}
+
+/* ── Tree diagram (Step 1) ─────────────────────────────────────────────────── */
+
+.onboarding-tree {
+  display: flex;
+  gap: 48px;
+  margin: 28px 0 8px;
+  justify-content: center;
+}
+
+.onboarding-tree-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.onboarding-tree-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.onboarding-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  padding: 5px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+.onboarding-tree-node.indent-1 { margin-left: 20px; }
+.onboarding-tree-node.indent-2 { margin-left: 40px; }
+
+.onboarding-tree-node .node-icon {
+  color: var(--text-dim);
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Mock editor (Step 2) ──────────────────────────────────────────────────── */
+
+.onboarding-mock-editor {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin: 24px 0 16px;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text-dim);
+  position: relative;
+  overflow: hidden;
+}
+
+.onboarding-mock-editor .mock-heading {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.onboarding-mock-editor .mock-bold {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.onboarding-mock-editor .mock-italic {
+  font-style: italic;
+  color: var(--text);
+}
+
+.onboarding-mock-editor .mock-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.onboarding-mock-editor .mock-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 16px;
+  background: var(--accent);
+  vertical-align: text-bottom;
+  animation: cursor-blink 1s step-end infinite;
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.onboarding-stat-pills {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.onboarding-stat-pill {
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.onboarding-stat-pill .pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* ── Wiki-link demo (Step 3) ───────────────────────────────────────────────── */
+
+.onboarding-wikilink-demo {
+  margin: 24px 0 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.onboarding-wikilink-text {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--text-dim);
+}
+
+.onboarding-wikilink-text .wiki-link-example {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  text-underline-offset: 3px;
+  cursor: default;
+}
+
+.onboarding-preview-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  width: 300px;
+  text-align: left;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  animation: preview-float 3s ease-in-out infinite;
+}
+
+@keyframes preview-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.onboarding-preview-card .preview-type {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.onboarding-preview-card .preview-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.onboarding-preview-card .preview-snippet {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* ── Writing modes (Step 4) ────────────────────────────────────────────────── */
+
+.onboarding-modes {
+  display: flex;
+  gap: 16px;
+  margin: 24px 0 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.onboarding-mode-card {
+  flex: 1;
+  max-width: 170px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.onboarding-mode-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.onboarding-mode-card .mode-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--accent);
+}
+
+.onboarding-mode-card .mode-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.onboarding-mode-card .mode-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* ── Mode mini-preview (CSS-only) ──────────────────────────────────────────── */
+
+.mode-mini-preview {
+  width: 100%;
+  height: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.mode-mini-preview .mini-line {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+/* Typewriter: center line highlighted */
+.mode-mini-preview.typewriter .mini-line:nth-child(3) {
+  background: var(--accent);
+}
+
+/* Focus: only middle line bright */
+.mode-mini-preview.focus .mini-line {
+  opacity: 0.25;
+}
+.mode-mini-preview.focus .mini-line:nth-child(3) {
+  opacity: 1;
+  background: var(--text);
+}
+
+/* Distraction-free: all lines with extra breathing room */
+.mode-mini-preview.distraction-free {
+  padding: 0 12px;
+}
+.mode-mini-preview.distraction-free .mini-line {
+  background: var(--text-dim);
+  opacity: 0.5;
+}
+
+.onboarding-shortcut-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+/* ── Feature highlights (Step 5) ───────────────────────────────────────────── */
+
+.onboarding-features {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 440px;
+  margin: 24px 0 8px;
+}
+
+.onboarding-feature-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  text-align: left;
+}
+
+.onboarding-feature-row .feature-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.onboarding-feature-row .feature-text {
+  flex: 1;
+}
+
+.onboarding-feature-row .feature-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.onboarding-feature-row .feature-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.onboarding-themes-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ── Shortcuts grid (Step 6) ───────────────────────────────────────────────── */
+
+.onboarding-shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 440px;
+  margin: 24px 0 8px;
+}
+
+.onboarding-shortcut-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.onboarding-shortcut-item .shortcut-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.onboarding-shortcut-item .shortcut-keys {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+/* ── Final step ────────────────────────────────────────────────────────────── */
+
+.onboarding-final-title {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: 36px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 16px;
+  letter-spacing: -0.01em;
+}
+
+.onboarding-final-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 12px;
+  max-width: 360px;
+}
+
+/* ── Navigation ────────────────────────────────────────────────────────────── */
+
+.onboarding-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 40px;
+  width: 100%;
+}
+
+.onboarding-nav .nav-back {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.onboarding-nav .nav-back:hover {
+  color: var(--text);
+  background: none;
+  border-color: transparent;
+}
+
+.onboarding-nav .nav-next {
+  padding: 10px 32px;
+  font-size: 14px;
+}
+
+/* ── Dots ──────────────────────────────────────────────────────────────────── */
+
+.onboarding-dots {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.onboarding-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.3s, transform 0.3s;
+}
+
+.onboarding-dot.active {
+  background: var(--accent);
+  transform: scale(1.3);
+}
+
+/* ── Re-trigger button in shortcuts panel ──────────────────────────────────── */
+
+.onboarding-retrigger {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  margin-top: 8px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.onboarding-retrigger:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}

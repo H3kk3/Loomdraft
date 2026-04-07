@@ -12,6 +12,7 @@ import { QuickOpen } from "./components/QuickOpen";
 import { ToastStack, createToast, type ToastData } from "./components/Toast";
 import { DocTypeSettings } from "./components/DocTypeSettings";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
+import { Onboarding } from "./components/Onboarding";
 import { useTheme } from "./useTheme";
 import {
   getManuscriptDocTypes,
@@ -244,6 +245,9 @@ export default function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [, setRecentKey] = useState(0);
   const [toasts, setToasts] = useState<ToastData[]>([]);
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => !localStorage.getItem("loomdraft:onboarding_completed"),
+  );
   const selectedNodeIdRef = useRef<string | null>(null);
   const projectPathRef = useRef<string | null>(null);
 
@@ -253,6 +257,11 @@ export default function App() {
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const handleOnboardingComplete = useCallback(() => {
+    localStorage.setItem("loomdraft:onboarding_completed", "true");
+    setShowOnboarding(false);
   }, []);
 
   // ── Theme/font operations with toast notifications ──────────────────────
@@ -573,6 +582,7 @@ export default function App() {
             onCancel={() => setShowNewProject(false)}
           />
         )}
+        {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
       </>
     );
   }
@@ -747,7 +757,14 @@ export default function App() {
         />
       )}
 
-      {showShortcuts && <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />}
+      {showShortcuts && (
+        <KeyboardShortcuts
+          onClose={() => setShowShortcuts(false)}
+          onShowOnboarding={() => setShowOnboarding(true)}
+        />
+      )}
+
+      {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>

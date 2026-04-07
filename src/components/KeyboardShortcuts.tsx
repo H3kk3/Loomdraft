@@ -51,7 +51,13 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
   },
 ];
 
-export function KeyboardShortcuts({ onClose }: { onClose: () => void }) {
+export function KeyboardShortcuts({
+  onClose,
+  onShowOnboarding,
+}: {
+  onClose: () => void;
+  onShowOnboarding?: () => void;
+}) {
   const backdropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -93,6 +99,17 @@ export function KeyboardShortcuts({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
+        {onShowOnboarding && (
+          <button
+            className="onboarding-retrigger"
+            onClick={() => {
+              onShowOnboarding();
+              onClose();
+            }}
+          >
+            Replay welcome tour
+          </button>
+        )}
       </div>
     </div>
   );
