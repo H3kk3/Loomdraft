@@ -6,6 +6,9 @@ import { keepFocus } from "./toolbarHelpers";
 import { FormattingButtons } from "./FormattingButtons";
 import { LinkPickerButton, ImageInsertButton } from "./InsertButtons";
 
+const isMac = navigator.platform.toUpperCase().includes("MAC");
+const mod = isMac ? "Cmd" : "Ctrl";
+
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
 export interface ToolbarProps {
@@ -122,7 +125,7 @@ export function Toolbar({
       <div className="toolbar-group">
         <button
           className="toolbar-btn"
-          data-tooltip="Undo (Ctrl+Z)"
+          data-tooltip={`Undo (${mod}+Z)`}
           disabled={!canUndo}
           onMouseDown={keepFocus}
           onClick={onUndo}
@@ -131,7 +134,7 @@ export function Toolbar({
         </button>
         <button
           className="toolbar-btn"
-          data-tooltip="Redo (Ctrl+Shift+Z)"
+          data-tooltip={`Redo (${mod}+Shift+Z)`}
           disabled={!canRedo}
           onMouseDown={keepFocus}
           onClick={onRedo}
@@ -158,7 +161,7 @@ export function Toolbar({
       <div className="toolbar-group">
         <button
           className="toolbar-btn"
-          data-tooltip="Cut (Ctrl+X)"
+          data-tooltip={`Cut (${mod}+X)`}
           onMouseDown={keepFocus}
           onClick={handleCut}
         >
@@ -166,7 +169,7 @@ export function Toolbar({
         </button>
         <button
           className="toolbar-btn"
-          data-tooltip="Copy (Ctrl+C)"
+          data-tooltip={`Copy (${mod}+C)`}
           onMouseDown={keepFocus}
           onClick={handleCopy}
         >
@@ -174,7 +177,7 @@ export function Toolbar({
         </button>
         <button
           className="toolbar-btn"
-          data-tooltip="Paste (Ctrl+V)"
+          data-tooltip={`Paste (${mod}+V)`}
           onMouseDown={keepFocus}
           onClick={handlePaste}
         >
@@ -188,7 +191,7 @@ export function Toolbar({
       <div className="toolbar-group">
         <button
           className="toolbar-btn"
-          data-tooltip="Select all (Ctrl+A)"
+          data-tooltip={`Select all (${mod}+A)`}
           onMouseDown={keepFocus}
           onClick={handleSelectAll}
         >
@@ -202,7 +205,7 @@ export function Toolbar({
       <div className="toolbar-group">
         <button
           className={`toolbar-btn${showFind ? " active" : ""}`}
-          data-tooltip="Find / Replace (Ctrl+F)"
+          data-tooltip={`Find / Replace (${mod}+F)`}
           onMouseDown={keepFocus}
           onClick={onToggleFind}
         >
@@ -217,7 +220,7 @@ export function Toolbar({
       <div className="toolbar-group">
         <button
           className={`toolbar-btn${showOutline ? " active" : ""}`}
-          data-tooltip="Outline navigator (Ctrl+Shift+O)"
+          data-tooltip={`Outline navigator (${mod}+Shift+O)`}
           onMouseDown={keepFocus}
           onClick={onToggleOutline}
         >
@@ -226,7 +229,7 @@ export function Toolbar({
         </button>
         <button
           className={`toolbar-btn${typewriterMode ? " active" : ""}`}
-          data-tooltip="Typewriter mode (Ctrl+Alt+T)"
+          data-tooltip={`Typewriter mode (${mod}+Alt+T)`}
           onMouseDown={keepFocus}
           onClick={onToggleTypewriter}
         >
@@ -234,7 +237,7 @@ export function Toolbar({
         </button>
         <button
           className={`toolbar-btn${focusMode ? " active" : ""}`}
-          data-tooltip="Focus mode (Ctrl+Alt+F)"
+          data-tooltip={`Focus mode (${mod}+Alt+F)`}
           onMouseDown={keepFocus}
           onClick={onToggleFocusMode}
         >
@@ -242,7 +245,7 @@ export function Toolbar({
         </button>
         <button
           className={`toolbar-btn${distractionFree ? " active" : ""}`}
-          data-tooltip="Distraction-free mode (Ctrl+Shift+D)"
+          data-tooltip={`Distraction-free mode (${mod}+Shift+D)`}
           onMouseDown={keepFocus}
           onClick={onToggleDistractionFree}
         >
@@ -250,7 +253,7 @@ export function Toolbar({
         </button>
         <button
           className={`toolbar-btn${softWrap ? " active" : ""}`}
-          data-tooltip="Soft wrap (Ctrl+Alt+W)"
+          data-tooltip={`Soft wrap (${mod}+Alt+W)`}
           onMouseDown={keepFocus}
           onClick={onToggleSoftWrap}
         >

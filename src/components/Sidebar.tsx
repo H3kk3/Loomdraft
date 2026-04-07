@@ -53,6 +53,9 @@ import { TreeNode, type DropTarget, type DropPos } from "./TreeNode";
 import { ContextMenu } from "./ContextMenu";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 
+const isMac = navigator.platform.toUpperCase().includes("MAC");
+const mod = isMac ? "Cmd" : "Ctrl";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface DragState {
@@ -418,7 +421,7 @@ export function Sidebar({
       <div className="sidebar-header">
         <span className="project-name">{rootNode?.title ?? "Project"}</span>
         <div style={{ display: "flex", gap: "2px" }}>
-          <button className="icon-btn" title="Search (Ctrl+Shift+F)" onClick={onSearch}>
+          <button className="icon-btn" title={`Search (${mod}+Shift+F)`} onClick={onSearch}>
             <Search size={15} strokeWidth={1.75} />
           </button>
           <button

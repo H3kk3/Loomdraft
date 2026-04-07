@@ -24,6 +24,9 @@ import { MAX_RECENT_PROJECTS } from "./constants";
 import logoUrl from "./assets/logo.png";
 import "./App.css";
 
+const isMac = navigator.platform.toUpperCase().includes("MAC");
+const mod = isMac ? "Cmd" : "Ctrl";
+
 // ── Breadcrumb helper ────────────────────────────────────────────────────────
 
 function buildBreadcrumb(
@@ -305,7 +308,12 @@ export default function App() {
         e.preventDefault();
         if (projectPath && manifest) setShowQuickOpen((v) => !v);
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+      // "/" is Slash on US, Shift+7 on Nordic/German — macOS remaps to US
+      // layout when Cmd is held, so we match the physical key positions too
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        (e.key === "/" || e.code === "Slash" || (e.shiftKey && e.code === "Digit7"))
+      ) {
         e.preventDefault();
         setShowShortcuts((v) => !v);
       }
@@ -654,27 +662,27 @@ export default function App() {
               </p>
               <div className="empty-state-shortcuts">
                 <div className="shortcut-row">
-                  <kbd>Ctrl+P</kbd>
+                  <kbd>{mod}+P</kbd>
                   <span>Quick open</span>
                 </div>
                 <div className="shortcut-row">
-                  <kbd>Ctrl+Shift+F</kbd>
+                  <kbd>{mod}+Shift+F</kbd>
                   <span>Search documents</span>
                 </div>
                 <div className="shortcut-row">
-                  <kbd>Ctrl+Shift+D</kbd>
+                  <kbd>{mod}+Shift+D</kbd>
                   <span>Distraction-free mode</span>
                 </div>
                 <div className="shortcut-row">
-                  <kbd>Ctrl+Alt+T</kbd>
+                  <kbd>{mod}+Alt+T</kbd>
                   <span>Typewriter mode</span>
                 </div>
                 <div className="shortcut-row">
-                  <kbd>Ctrl+Alt+F</kbd>
+                  <kbd>{mod}+Alt+F</kbd>
                   <span>Focus mode</span>
                 </div>
                 <div className="shortcut-row">
-                  <kbd>Ctrl+/</kbd>
+                  <kbd>{mod}+/</kbd>
                   <span>All keyboard shortcuts</span>
                 </div>
               </div>

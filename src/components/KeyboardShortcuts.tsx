@@ -40,6 +40,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: `${mod}+Shift+D`, label: "Distraction-free mode" },
       { keys: `${mod}+Alt+T`, label: "Typewriter mode" },
       { keys: `${mod}+Alt+F`, label: "Focus mode" },
+      { keys: `${mod}+Alt+W`, label: "Soft wrap" },
     ],
   },
   {
