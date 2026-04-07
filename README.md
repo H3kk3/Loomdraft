@@ -6,29 +6,33 @@
 
 **A distraction-free writing app for novelists, built for your desktop.**
 
-<!-- screenshot: Hero — full app window showing sidebar with document tree on the left and the editor with a chapter open on the right. A dark theme is active. -->
+<!-- screenshot: Hero - full app window showing sidebar with document tree on the left and the editor with a chapter open on the right. A dark theme is active. -->
 
 ---
 
 ## What is Loomdraft?
 
-Loomdraft is a local-first desktop writing application designed for novelists, screenwriters, and long-form creative writers. It combines a hierarchical project manager with a rich Markdown editor — giving you a place to draft your manuscript and organize your world-building notes side by side. Your data never leaves your machine.
+Loomdraft is a local-first desktop writing application designed for novelists, screenwriters, and long-form creative writers. It combines a hierarchical project manager with a rich Markdown editor, giving you a place to draft your manuscript and organize your world-building notes side by side. Your data never leaves your machine.
 
 ---
 
 ## Features
+
+### Onboarding Tour
+
+A guided welcome tour introduces new users to the app on first launch. Eight steps walk through project structure, the editor, wiki-links, writing modes, search, export, themes, and keyboard shortcuts. The tour can be replayed anytime from the keyboard shortcuts panel (Cmd+/ or Ctrl+/).
 
 ### Project Organization
 
 Structure your novel as a tree of documents. Separate your manuscript from planning materials, drag nodes to reorder, and let the sidebar keep everything at your fingertips.
 
 - Hierarchical document tree with manuscript and planning sections
-- 14 document types — from Parts and Chapters down to Characters, Locations, and Lore entries
+- 14 document types, from Parts and Chapters down to Characters, Locations, and Lore entries
 - Drag-and-drop reordering with visual drop indicators
 - Right-click context menus for adding, renaming, and deleting nodes
 - Recent projects list for quick access
 
-<!-- screenshot: Sidebar — expanded document tree showing manuscript section (Part → Chapters → Scenes) and planning section (Characters, Locations) with icons for each doc type. -->
+<!-- screenshot: Sidebar - expanded document tree showing manuscript section (Part, Chapters, Scenes) and planning section (Characters, Locations) with icons for each doc type. -->
 
 ### Rich Markdown Editor
 
@@ -43,18 +47,18 @@ Write in Markdown with a fast, modern editor powered by CodeMirror 6. Auto-save 
 - Inline image rendering with optional size syntax (`![alt|600x400](path)`)
 - Image import dialog (PNG, JPG, GIF, WebP, SVG, BMP)
 
-<!-- screenshot: Editor — a chapter document open showing Markdown content with headings, emphasis, wiki-links, and an inline image. The toolbar is visible at the top with formatting buttons and toggles. -->
+<!-- screenshot: Editor - a chapter document open showing Markdown content with headings, emphasis, wiki-links, and an inline image. The toolbar is visible at the top with formatting buttons and toggles. -->
 
 ### Writing Modes
 
 Tailor the editor to how you write best.
 
-- **Typewriter Mode** — keeps your cursor line centered on screen as you type
-- **Focus Mode** — dims every line except the one you're writing, reducing visual noise
-- **Distraction-Free Mode** — hides the sidebar entirely for full-screen writing
-- **Manuscript Mode** — centers your content in a narrower column for a book-page feel
+- **Typewriter Mode** keeps your cursor line centered on screen as you type
+- **Focus Mode** dims every line except the one you're writing, reducing visual noise
+- **Distraction-Free Mode** hides the sidebar entirely for full-screen writing
+- **Manuscript Mode** centers your content in a narrower column for a book-page feel
 
-<!-- screenshot: Focus Mode — editor with Focus Mode active, showing the current line in full brightness while surrounding lines are dimmed. -->
+<!-- screenshot: Focus Mode - editor with Focus Mode active, showing the current line in full brightness while surrounding lines are dimmed. -->
 
 ### Wiki Links & Cross-References
 
@@ -66,7 +70,7 @@ Connect your documents with `[[wiki-links]]`. Click to navigate, hover to previe
 - Resolved links styled in blue, unresolved in red
 - Automatic backlink tracking via SQLite index
 
-<!-- screenshot: Wiki-link hover — the editor showing a [[Character Name]] link with a hover preview card floating above it, displaying the character document's title, type badge, and first few lines of content. -->
+<!-- screenshot: Wiki-link hover - the editor showing a [[Character Name]] link with a hover preview card floating above it, displaying the character document's title, type badge, and first few lines of content. -->
 
 ### Spell Check
 
@@ -79,21 +83,21 @@ Find anything in your project instantly. Search across all documents with result
 - Project-wide full-text search (Ctrl/Cmd + Shift + F)
 - Powered by SQLite FTS5 for fast, ranked results
 - Keyboard-navigable results with snippets
-- Backlink graph tracking — see which documents reference each other
+- Backlink graph tracking to see which documents reference each other
 
-<!-- screenshot: Search panel — the search overlay open with a query typed, showing a list of matching documents with highlighted snippet text. -->
+<!-- screenshot: Search panel - the search overlay open with a query typed, showing a list of matching documents with highlighted snippet text. -->
 
 ### Export
 
 Compile your manuscript into a single file, ready to share or print.
 
-- **Markdown** — clean plaintext export
-- **HTML** — styled and self-contained with serif typography and table of contents
-- **PDF** — print-ready with proper margins, serif fonts, and clickable TOC
+- **Markdown** clean plaintext export
+- **HTML** styled and self-contained with serif typography and table of contents
+- **PDF** print-ready with proper margins, serif fonts, and clickable TOC
 
-Exports walk your manuscript tree in order, strip frontmatter and wiki-links, and generate heading levels based on document type (Part → H1, Chapter → H2, Scene → H3). A toast shows word count and section count when done.
+Exports walk your manuscript tree in order, strip frontmatter and wiki-links, and generate heading levels based on document type (Part = H1, Chapter = H2, Scene = H3). A toast shows word count and section count when done.
 
-<!-- screenshot: Export dialog — the export format picker showing Markdown, HTML, and PDF options with the project title. -->
+<!-- screenshot: Export dialog - the export format picker showing Markdown, HTML, and PDF options with the project title. -->
 
 ### Version History
 
@@ -104,25 +108,25 @@ Every save creates a backup. Browse and restore any previous version of a docume
 - One-click restore to roll back to any version
 - Safety backup created before each restore
 
-<!-- screenshot: Version history — the version history panel showing a list of backups with timestamps, sizes, and restore buttons. -->
+<!-- screenshot: Version history - the version history panel showing a list of backups with timestamps, sizes, and restore buttons. -->
 
 ### Themes
 
-Seven built-in themes with full syntax highlighting — or import your own.
+Seven built-in themes with full syntax highlighting, or import your own.
 
 | Theme | Appearance | Vibe |
 |-------|-----------|------|
-| **Dark** | Dark | Purple accent on cool gray — the default |
+| **Dark** | Dark | Purple accent on cool gray, the default |
 | **Light** | Light | Indigo accent on clean white |
-| **Midnight Jazz** | Dark | Deep navy with warm gold — late-night lounge |
-| **Forest Canopy** | Dark | Moss greens with amber — dappled forest light |
-| **Sunset Drift** | Dark | Warm tones with coral and peach — desert dusk |
-| **Arctic Fog** | Light | Ice blue and slate — clean and calming |
-| **Sepia Study** | Light | Cream and brown — leather-bound journal |
+| **Midnight Jazz** | Dark | Deep navy with warm gold, late-night lounge |
+| **Forest Canopy** | Dark | Moss greens with amber, dappled forest light |
+| **Sunset Drift** | Dark | Warm tones with coral and peach, desert dusk |
+| **Arctic Fog** | Light | Ice blue and slate, clean and calming |
+| **Sepia Study** | Light | Cream and brown, leather-bound journal |
 
 Each theme includes a complete color palette and syntax highlighting colors for headings, emphasis, links, code blocks, and more.
 
-<!-- screenshot: Theme showcase — a grid or strip showing the same document rendered in all 7 built-in themes, demonstrating the visual variety. -->
+<!-- screenshot: Theme showcase - a grid or strip showing the same document rendered in all 7 built-in themes, demonstrating the visual variety. -->
 
 ### Custom Themes & Fonts
 
@@ -152,7 +156,30 @@ Import your own color themes as JSON files, or change the editor and UI fonts to
 
 **Custom fonts:** Import `.ttf`, `.otf`, or `.woff2` files for the UI or editor font. Fonts are stored in the app data directory and persist across sessions.
 
-<!-- screenshot: Theme picker — the theme picker popover open in the sidebar, showing the list of built-in themes with accent-color dots, a custom theme section, the import button, and font controls at the bottom. -->
+<!-- screenshot: Theme picker - the theme picker popover open in the sidebar, showing the list of built-in themes with accent-color dots, a custom theme section, the import button, and font controls at the bottom. -->
+
+---
+
+## Keyboard Shortcuts
+
+All shortcuts show the correct modifier for your platform (Cmd on macOS, Ctrl on Windows/Linux).
+
+| Shortcut | Action |
+|----------|--------|
+| Cmd/Ctrl + S | Save |
+| Cmd/Ctrl + P | Quick open |
+| Cmd/Ctrl + Shift + F | Search documents |
+| Cmd/Ctrl + Shift + E | Filter sidebar tree |
+| Cmd/Ctrl + Shift + D | Distraction-free mode |
+| Cmd/Ctrl + Alt + T | Typewriter mode |
+| Cmd/Ctrl + Alt + F | Focus mode |
+| Cmd/Ctrl + Alt + W | Soft wrap |
+| Cmd/Ctrl + Shift + O | Heading outline |
+| Cmd/Ctrl + / | Show all shortcuts |
+| Cmd/Ctrl + F | Find in document |
+| Cmd/Ctrl + B | Bold |
+| Cmd/Ctrl + I | Italic |
+| F2 | Rename selected node |
 
 ---
 
@@ -172,7 +199,7 @@ Loomdraft separates your work into two categories:
 | | Research |
 | | Note |
 
-Manuscript documents compile into your exported file in tree order. Planning documents are for reference — character sheets, world-building notes, outlines — and are excluded from export.
+Manuscript documents compile into your exported file in tree order. Planning documents are for reference (character sheets, world-building notes, outlines) and are excluded from export.
 
 ---
 
@@ -190,7 +217,7 @@ Manuscript documents compile into your exported file in tree order. Planning doc
 | PDF Generation | [printpdf](https://github.com/fschutt/printpdf) |
 | Icons | [Lucide](https://lucide.dev/) |
 
-**Local-first.** Your projects are plain files on disk — Markdown documents with YAML frontmatter, organized in folders. No cloud, no accounts, no telemetry.
+**Local-first.** Your projects are plain files on disk: Markdown documents with YAML frontmatter, organized in folders. No cloud, no accounts, no telemetry.
 
 ---
 
