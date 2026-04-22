@@ -46,7 +46,9 @@ import {
 import type { Theme } from "../useTheme";
 import type { ThemeMetadata, FontInfo, FontPreference } from "../themes/themeTypes";
 import { ThemePicker } from "./ThemePicker";
-import type { ProjectManifest, DocTypeDefinition } from "../types";
+import { parseFilterQuery, matchesFilter } from "../utils/filter";
+import { STATUS_VALUES } from "../types";
+import type { ProjectManifest, DocTypeDefinition, ProjectMetadata } from "../types";
 import type { ProjectMetadataHandle } from "../useProjectMetadata";
 import type { DocCategory } from "../docTypes";
 import { DRAG_THRESHOLD_PX } from "../constants";
@@ -75,18 +77,25 @@ function findParent(manifest: ProjectManifest, nodeId: string): string | null {
 
 /** Compute which nodes should be visible given a filter query.
  *  Returns null if no filter is active, or a Set of visible node IDs
- *  (matching nodes + all their ancestors up to root). */
+ *  (matching nodes + all their ancestors up to root).
+ *
+ *  Supports prefixed tokens (`type:scene`, `status:draft`, `tag:foreshadowing`)
+ *  combined with free text that matches the node title. See `utils/filter.ts`. */
 function computeVisibleNodes(
   manifest: ProjectManifest,
   query: string,
+  metadata: ProjectMetadata,
 ): Set<string> | null {
   if (!query.trim()) return null;
-  const lowerQ = query.toLowerCase();
+  const filter = parseFilterQuery(query);
   const visible = new Set<string>();
 
   for (const [id, node] of Object.entries(manifest.nodes)) {
-    if ((node.title ?? id).toLowerCase().includes(lowerQ)) {
-      // Add this node and all ancestors
+    const title = node.title ?? id;
+    const docType = node.doc_type ?? "";
+    const meta = metadata[id] ?? { synopsis: null, tags: [], status: STATUS_VALUES[0] };
+    const matchable = { title, doc_type: docType };
+    if (matchesFilter(filter, matchable, meta)) {
       visible.add(id);
       let current = id;
       let parent = findParent(manifest, current);
@@ -157,7 +166,7 @@ export interface SidebarProps {
   fontPrefs: FontPreference;
   onImportFont: (target: "ui" | "mono") => void;
   onResetFont: (target: "ui" | "mono") => void;
-  // Declared here so App.tsx can thread metadata through; consumed by Tasks 9–12 (tree status strip, context menus, tag editor).
+  // Provides project metadata (status, tags, synopsis) for filtering + future consumers (tree status strip, context menus).
   metadataHandle?: ProjectMetadataHandle;
 }
 
@@ -185,6 +194,7 @@ export function Sidebar({
   fontPrefs,
   onImportFont,
   onResetFont,
+  metadataHandle,
 }: SidebarProps) {
   const rootNode = manifest.nodes[manifest.root];
 
@@ -241,8 +251,8 @@ export function Sidebar({
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   const visibleNodes = useMemo(
-    () => computeVisibleNodes(manifest, treeFilter),
-    [manifest, treeFilter],
+    () => computeVisibleNodes(manifest, treeFilter, metadataHandle?.metadata ?? {}),
+    [manifest, treeFilter, metadataHandle?.metadata],
   );
 
   // Ctrl+Shift+E to focus filter
