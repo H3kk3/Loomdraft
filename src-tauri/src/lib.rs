@@ -3,6 +3,7 @@
 mod db;
 mod error;
 mod export;
+mod frontmatter;
 mod project;
 mod theme;
 
@@ -243,7 +244,7 @@ fn get_manuscript_word_count(project_path: String) -> CmdResult<WordCountResult>
         };
 
         // Strip frontmatter to count only body text
-        let body = match project::parse_frontmatter(&raw) {
+        let body = match frontmatter::parse_frontmatter(&raw) {
             Some((_fm, body)) => body,
             None => raw,
         };

@@ -204,7 +204,7 @@ pub fn reindex(
                 continue;
             };
 
-            let Some((fm, body)) = crate::project::parse_frontmatter(&raw) else {
+            let Some((fm, body)) = crate::frontmatter::parse_frontmatter(&raw) else {
                 continue;
             };
 

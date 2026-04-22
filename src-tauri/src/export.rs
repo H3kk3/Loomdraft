@@ -26,7 +26,8 @@ static RE_HR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^[-*_]{3,}\s*$
 // Re-alias the image crate to avoid conflict with printpdf::image module.
 use ::image as img_crate;
 
-use crate::project::{is_manuscript_doc_type, parse_frontmatter, DocTypeDefinition, ProjectManifest};
+use crate::frontmatter::parse_frontmatter;
+use crate::project::{is_manuscript_doc_type, DocTypeDefinition, ProjectManifest};
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
