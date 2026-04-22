@@ -9,7 +9,8 @@ mod theme;
 
 use db::SearchResult;
 use error::LoomdraftError;
-use project::{BackupEntry, DocTypeDefinition, DocumentContent, ProjectManifest};
+use frontmatter::Status;
+use project::{BackupEntry, DocTypeDefinition, DocumentContent, NodeMetadata, ProjectManifest};
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -158,6 +159,73 @@ fn rename_node(
     new_title: String,
 ) -> CmdResult<ProjectManifest> {
     Ok(project::rename_node(&PathBuf::from(&project_path), &node_id, &new_title)?)
+}
+
+// ── Metadata + color commands (v0.3) ─────────────────────────────────────────
+
+#[tauri::command]
+fn get_project_metadata(
+    project_path: String,
+) -> CmdResult<std::collections::HashMap<String, NodeMetadata>> {
+    let path = PathBuf::from(&project_path);
+    let manifest = project::load_manifest(&path)?;
+    Ok(project::collect_project_metadata(&path, &manifest))
+}
+
+/// Update a document's metadata (synopsis, tags, status).
+///
+/// IPC boundary note: `clear_synopsis: Option<bool>` is intentional.
+/// Tauri's default serde deserialization cannot distinguish an absent field
+/// from an explicit `null`, so `synopsis: Option<String>` alone cannot express
+/// "clear the existing synopsis" vs "leave it unchanged". The `clear_synopsis`
+/// flag resolves that ambiguity — when true, synopsis is cleared; otherwise
+/// `synopsis: Some(s)` sets it and `synopsis: None` leaves it unchanged.
+///
+/// From JavaScript, pass `clearSynopsis: true` (camelCase).
+#[tauri::command]
+fn update_node_metadata(
+    project_path: String,
+    node_id: String,
+    synopsis: Option<String>,
+    clear_synopsis: Option<bool>,
+    tags: Option<Vec<String>>,
+    status: Option<Status>,
+) -> CmdResult<NodeMetadata> {
+    let path = PathBuf::from(&project_path);
+    let manifest = project::load_manifest(&path)?;
+    Ok(project::update_node_metadata_on_disk(
+        &path,
+        &manifest,
+        &node_id,
+        synopsis,
+        clear_synopsis.unwrap_or(false),
+        tags,
+        status,
+    )?)
+}
+
+#[tauri::command]
+fn set_tag_color(
+    project_path: String,
+    tag: String,
+    color: Option<String>,
+) -> CmdResult<ProjectManifest> {
+    let path = PathBuf::from(&project_path);
+    let mut manifest = project::load_manifest(&path)?;
+    project::apply_tag_color(&path, &mut manifest, &tag, color)?;
+    Ok(manifest)
+}
+
+#[tauri::command]
+fn set_status_color(
+    project_path: String,
+    status: String,
+    color: Option<String>,
+) -> CmdResult<ProjectManifest> {
+    let path = PathBuf::from(&project_path);
+    let mut manifest = project::load_manifest(&path)?;
+    project::apply_status_color(&path, &mut manifest, &status, color)?;
+    Ok(manifest)
 }
 
 // ── Search & index commands ───────────────────────────────────────────────────
@@ -586,6 +654,11 @@ pub fn run() {
             delete_node,
             rename_node,
             move_node,
+            // Metadata + colors (v0.3)
+            get_project_metadata,
+            update_node_metadata,
+            set_tag_color,
+            set_status_color,
             search_documents,
             get_backlinks,
             reindex_project,
