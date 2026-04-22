@@ -33,6 +33,26 @@ export interface ThemeFonts {
   mono?: string | null;
 }
 
+// v0.3: Status colors for document status indicators
+export interface ThemeStatusColors {
+  draft?: string;
+  "in-revision"?: string;
+  revised?: string;
+  final?: string;
+  stuck?: string;
+  cut?: string;
+}
+
+// Hardcoded defaults — used when a theme omits status colors
+export const DEFAULT_STATUS_COLORS: Required<ThemeStatusColors> = {
+  draft: "#888888",
+  "in-revision": "#d4a545",
+  revised: "#5aa364",
+  final: "#4a90e2",
+  stuck: "#c95a5a",
+  cut: "#5a5a5a",
+};
+
 /** Full theme definition — used for both built-in and custom themes */
 export interface ThemeDefinition {
   name: string;
@@ -43,6 +63,7 @@ export interface ThemeDefinition {
   colors: ThemeColors;
   syntax?: ThemeSyntaxColors;
   fonts?: ThemeFonts;
+  status?: ThemeStatusColors;
 }
 
 /** Lightweight metadata for listing themes without loading full color data */
@@ -81,3 +102,4 @@ export const THEME_COLOR_KEYS: (keyof ThemeColors)[] = [
   "danger",
   "radius",
 ];
+

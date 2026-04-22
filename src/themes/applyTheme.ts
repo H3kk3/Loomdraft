@@ -1,12 +1,19 @@
 import type { ThemeDefinition } from "./themeTypes";
-import { THEME_COLOR_KEYS } from "./themeTypes";
+import {
+  DEFAULT_STATUS_COLORS,
+  THEME_COLOR_KEYS,
+} from "./themeTypes";
+import { STATUS_VALUES } from "../types";
 
 /**
  * Apply a theme at runtime by setting CSS custom properties on <html>.
  * Uses `style.setProperty` which overrides `:root` and `[data-theme]` rules
  * in App.css with highest specificity. The CSS rules remain as fallback.
  */
-export function applyTheme(theme: ThemeDefinition): void {
+export function applyTheme(
+  theme: ThemeDefinition,
+  projectStatusOverrides?: Record<string, string> | null,
+): void {
   const root = document.documentElement;
 
   // 1. Set data-theme attribute (controls color-scheme for native elements)
@@ -38,6 +45,21 @@ export function applyTheme(theme: ThemeDefinition): void {
   } else {
     root.style.removeProperty("--font-mono");
   }
+
+  // 5. Apply status colors — merge theme → defaults, then project-level overrides
+  const status: Record<string, string> = {
+    ...DEFAULT_STATUS_COLORS,
+    ...(theme.status ?? {}),
+  };
+  if (projectStatusOverrides) {
+    for (const key of STATUS_VALUES) {
+      const override = projectStatusOverrides[key];
+      if (override != null) status[key] = override;
+    }
+  }
+  for (const key of STATUS_VALUES) {
+    root.style.setProperty(`--status-${key}`, status[key]);
+  }
 }
 
 /**
@@ -52,4 +74,7 @@ export function clearThemeOverrides(): void {
   root.style.removeProperty("color-scheme");
   root.style.removeProperty("--font");
   root.style.removeProperty("--font-mono");
+  for (const key of STATUS_VALUES) {
+    root.style.removeProperty(`--status-${key}`);
+  }
 }
