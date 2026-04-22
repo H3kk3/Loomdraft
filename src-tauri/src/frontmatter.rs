@@ -1,9 +1,6 @@
 // src-tauri/src/frontmatter.rs
 
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
-
-use crate::project::ProjectNode;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentFrontmatter {
@@ -18,8 +15,10 @@ pub struct DocumentFrontmatter {
 }
 
 pub fn parse_frontmatter(content: &str) -> Option<(DocumentFrontmatter, String)> {
+    // Strip BOM
     let content = content.trim_start_matches('\u{feff}');
     let owned: String;
+    // Normalise CRLF
     let content = if content.contains('\r') {
         owned = content.replace("\r\n", "\n");
         &owned
@@ -34,6 +33,7 @@ pub fn parse_frontmatter(content: &str) -> Option<(DocumentFrontmatter, String)>
     let rest = &content[4..];
     let end = rest.find("\n---\n")?;
     let yaml = &rest[..end];
+    // body starts after "\n---\n" (5 chars)
     let body = rest[end + 5..].trim_start_matches('\n').to_string();
 
     let fm: DocumentFrontmatter = serde_yaml::from_str(yaml).ok()?;
@@ -44,16 +44,6 @@ pub fn write_frontmatter(fm: &DocumentFrontmatter, body: &str) -> Result<String,
     let yaml = serde_yaml::to_string(fm)
         .map_err(|e| format!("Cannot serialize frontmatter: {e}"))?;
     Ok(format!("---\n{}---\n\n{}", yaml, body))
-}
-
-pub(crate) fn default_frontmatter(node_id: &str, node: &ProjectNode) -> DocumentFrontmatter {
-    DocumentFrontmatter {
-        id: node_id.to_string(),
-        doc_type: node.doc_type.clone().unwrap_or_else(|| "chapter".to_string()),
-        title: node.title.clone().unwrap_or_else(|| "Untitled".to_string()),
-        created: Some(Utc::now().to_rfc3339()),
-        modified: None,
-    }
 }
 
 #[cfg(test)]

@@ -6,9 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-use crate::frontmatter::{
-    default_frontmatter, parse_frontmatter, write_frontmatter, DocumentFrontmatter,
-};
+use crate::frontmatter::{parse_frontmatter, write_frontmatter, DocumentFrontmatter};
 
 // ── Doc type definitions ──────────────────────────────────────────────────────
 
@@ -836,6 +834,16 @@ fn unique_filename(dir: PathBuf, prefix: &str, slug: &str) -> String {
             return candidate;
         }
         n += 1;
+    }
+}
+
+fn default_frontmatter(node_id: &str, node: &ProjectNode) -> DocumentFrontmatter {
+    DocumentFrontmatter {
+        id: node_id.to_string(),
+        doc_type: node.doc_type.clone().unwrap_or_else(|| "chapter".to_string()),
+        title: node.title.clone().unwrap_or_else(|| "Untitled".to_string()),
+        created: Some(Utc::now().to_rfc3339()),
+        modified: None,
     }
 }
 
