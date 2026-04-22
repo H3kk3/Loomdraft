@@ -47,6 +47,7 @@ import type { Theme } from "../useTheme";
 import type { ThemeMetadata, FontInfo, FontPreference } from "../themes/themeTypes";
 import { ThemePicker } from "./ThemePicker";
 import type { ProjectManifest, DocTypeDefinition } from "../types";
+import type { ProjectMetadataHandle } from "../useProjectMetadata";
 import type { DocCategory } from "../docTypes";
 import { DRAG_THRESHOLD_PX } from "../constants";
 import { TreeNode, type DropTarget, type DropPos } from "./TreeNode";
@@ -156,6 +157,8 @@ export interface SidebarProps {
   fontPrefs: FontPreference;
   onImportFont: (target: "ui" | "mono") => void;
   onResetFont: (target: "ui" | "mono") => void;
+  // Declared here so App.tsx can thread metadata through; consumed by Tasks 9–12 (tree status strip, context menus, tag editor).
+  metadataHandle?: ProjectMetadataHandle;
 }
 
 export function Sidebar({

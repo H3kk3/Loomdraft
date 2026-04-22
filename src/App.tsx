@@ -14,6 +14,7 @@ import { DocTypeSettings } from "./components/DocTypeSettings";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { Onboarding } from "./components/Onboarding";
 import { useTheme } from "./useTheme";
+import { useProjectMetadata } from "./useProjectMetadata";
 import {
   getManuscriptDocTypes,
   getPlanningDocTypes,
@@ -230,6 +231,7 @@ export default function App() {
     resetFont,
   } = useTheme();
   const [projectPath, setProjectPath] = useState<string | null>(null);
+  const metadataHandle = useProjectMetadata(projectPath);
   const [manifest, setManifest] = useState<ProjectManifest | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [document, setDocument] = useState<DocumentContent | null>(null);
@@ -417,6 +419,12 @@ export default function App() {
         nodeId,
         content,
       });
+
+      // v0.3: refresh metadata since save may have changed frontmatter (synopsis/tags/status)
+      // Guard against stale saves — only reload if we're still in the same project context.
+      if (projectPathRef.current === currentProjectPath) {
+        void metadataHandle.reload();
+      }
 
       // Ignore stale async save responses if user already navigated away.
       if (selectedNodeIdRef.current === nodeId) {
@@ -620,6 +628,7 @@ export default function App() {
           fontPrefs={fontPrefs}
           onImportFont={handleImportFont}
           onResetFont={resetFont}
+          metadataHandle={metadataHandle}
         />
       )}
 
