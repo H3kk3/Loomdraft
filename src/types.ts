@@ -1,4 +1,15 @@
-// Mirror of Rust structs in src-tauri/src/project.rs and db.rs
+// Mirror of Rust structs in src-tauri/src/project.rs, frontmatter.rs, and db.rs
+
+export const STATUS_VALUES = [
+  "draft",
+  "in-revision",
+  "revised",
+  "final",
+  "stuck",
+  "cut",
+] as const;
+
+export type Status = (typeof STATUS_VALUES)[number];
 
 export interface ProjectNode {
   title?: string;
@@ -21,6 +32,10 @@ export interface ProjectManifest {
   root: string;
   nodes: Record<string, ProjectNode>;
   doc_types: DocTypeDefinition[];
+  // Omitted when empty (serde skip_serializing_if = "HashMap::is_empty")
+  tag_colors?: Record<string, string>;
+  // Omitted when None (serde skip_serializing_if = "Option::is_none"); never null
+  status_colors?: Record<string, string>;
 }
 
 export interface DocumentContent {
@@ -30,6 +45,14 @@ export interface DocumentContent {
   content: string;
   file: string;
 }
+
+export interface NodeMetadata {
+  synopsis: string | null;
+  tags: string[];
+  status: Status;
+}
+
+export type ProjectMetadata = Record<string, NodeMetadata>;
 
 export interface SearchResult {
   id: string;
