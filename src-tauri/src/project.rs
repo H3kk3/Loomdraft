@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-use crate::frontmatter::{parse_frontmatter, write_frontmatter, DocumentFrontmatter};
+use crate::frontmatter::{DocumentFrontmatter, Status, parse_frontmatter, write_frontmatter};
 
 // ── Doc type definitions ──────────────────────────────────────────────────────
 
@@ -487,6 +487,9 @@ pub fn add_node(
         title: title.to_string(),
         created: Some(Utc::now().to_rfc3339()),
         modified: None,
+        synopsis: None,
+        tags: Vec::new(),
+        status: Status::default(),
     };
     let raw = write_frontmatter(&fm, "")?;
     fs::write(project_path.join(&file_rel), raw)
@@ -844,6 +847,9 @@ fn default_frontmatter(node_id: &str, node: &ProjectNode) -> DocumentFrontmatter
         title: node.title.clone().unwrap_or_else(|| "Untitled".to_string()),
         created: Some(Utc::now().to_rfc3339()),
         modified: None,
+        synopsis: None,
+        tags: Vec::new(),
+        status: Status::default(),
     }
 }
 
@@ -1075,6 +1081,9 @@ mod tests {
             title: "Chapter One".to_string(),
             created: Some("2026-01-01T00:00:00Z".to_string()),
             modified: None,
+            synopsis: None,
+            tags: Vec::new(),
+            status: Status::default(),
         };
         let raw = write_frontmatter(&fm, "Original content").unwrap();
         fs::write(project.join("manuscript/chap--one.md"), &raw).unwrap();
@@ -1180,6 +1189,9 @@ mod tests {
             title: "Chapter One".to_string(),
             created: Some("2026-01-01T00:00:00Z".to_string()),
             modified: Some("2026-01-02T00:00:00Z".to_string()),
+            synopsis: None,
+            tags: Vec::new(),
+            status: Status::default(),
         };
         let new_raw = write_frontmatter(&fm, "Modified content").unwrap();
         fs::write(project.join("manuscript/chap--one.md"), &new_raw).unwrap();

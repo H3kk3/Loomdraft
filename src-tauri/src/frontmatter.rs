@@ -2,6 +2,18 @@
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Status {
+    #[default]
+    Draft,
+    InRevision,
+    Revised,
+    Final,
+    Stuck,
+    Cut,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentFrontmatter {
     pub id: String,
@@ -12,6 +24,16 @@ pub struct DocumentFrontmatter {
     pub created: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modified: Option<String>,
+
+    // v0.3 additions
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub synopsis: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+
+    #[serde(default)]
+    pub status: Status,
 }
 
 pub fn parse_frontmatter(content: &str) -> Option<(DocumentFrontmatter, String)> {
@@ -102,6 +124,9 @@ mod tests {
             title: "Roundtrip".to_string(),
             created: None,
             modified: None,
+            synopsis: None,
+            tags: Vec::new(),
+            status: Status::default(),
         };
         let raw = write_frontmatter(&fm, "Body content").expect("should serialize");
         let (parsed, body) = parse_frontmatter(&raw).expect("should roundtrip");
@@ -109,5 +134,49 @@ mod tests {
         assert_eq!(parsed.doc_type, "scene");
         assert_eq!(parsed.title, "Roundtrip");
         assert_eq!(body, "Body content");
+    }
+
+    #[test]
+    fn parse_frontmatter_defaults_missing_new_fields() {
+        let input = "---\nid: n1\ntype: scene\ntitle: Old Doc\n---\n\nBody";
+        let (fm, _body) = parse_frontmatter(input).expect("should parse");
+        assert_eq!(fm.synopsis, None);
+        assert_eq!(fm.tags, Vec::<String>::new());
+        assert_eq!(fm.status, Status::Draft);
+    }
+
+    #[test]
+    fn parse_frontmatter_reads_new_fields() {
+        let input = "---\n\
+id: n1\n\
+type: scene\n\
+title: New Doc\n\
+synopsis: A dark confrontation at the crossroads.\n\
+tags:\n  - subplot-a\n  - foreshadowing\n\
+status: in-revision\n\
+---\n\nBody";
+        let (fm, _body) = parse_frontmatter(input).expect("should parse");
+        assert_eq!(fm.synopsis.as_deref(), Some("A dark confrontation at the crossroads."));
+        assert_eq!(fm.tags, vec!["subplot-a".to_string(), "foreshadowing".to_string()]);
+        assert_eq!(fm.status, Status::InRevision);
+    }
+
+    #[test]
+    fn write_frontmatter_roundtrips_new_fields() {
+        let fm = DocumentFrontmatter {
+            id: "n1".to_string(),
+            doc_type: "scene".to_string(),
+            title: "T".to_string(),
+            created: None,
+            modified: None,
+            synopsis: Some("syn".to_string()),
+            tags: vec!["a".to_string(), "b".to_string()],
+            status: Status::Final,
+        };
+        let raw = write_frontmatter(&fm, "body").expect("serialize");
+        let (parsed, _body) = parse_frontmatter(&raw).expect("parse");
+        assert_eq!(parsed.synopsis.as_deref(), Some("syn"));
+        assert_eq!(parsed.tags, vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(parsed.status, Status::Final);
     }
 }
