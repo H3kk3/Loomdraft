@@ -56,6 +56,14 @@ pub struct ProjectManifest {
     pub nodes: HashMap<String, ProjectNode>,
     #[serde(default)]
     pub doc_types: Vec<DocTypeDefinition>,
+
+    // v0.3: per-project tag colors (tag name -> hex color)
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub tag_colors: HashMap<String, String>,
+
+    // v0.3: optional per-project overrides for theme status colors
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_colors: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,6 +120,8 @@ pub fn create_project(dir: &Path, name: &str) -> Result<(PathBuf, ProjectManifes
         root: "node_root".to_string(),
         nodes,
         doc_types: default_doc_types(),
+        tag_colors: HashMap::new(),
+        status_colors: None,
     };
 
     save_manifest(&project_path, &manifest)?;
@@ -997,7 +1007,7 @@ mod tests {
             doc_type: None,
             children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes, doc_types: default_doc_types() };
+        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes, doc_types: default_doc_types(), tag_colors: HashMap::new(), status_colors: None };
 
         let result = collect_descendants(&manifest, "a");
         assert_eq!(result, vec!["a"]);
@@ -1030,7 +1040,7 @@ mod tests {
             doc_type: None,
             children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes, doc_types: default_doc_types() };
+        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes, doc_types: default_doc_types(), tag_colors: HashMap::new(), status_colors: None };
 
         let mut result = collect_descendants(&manifest, "a");
         result.sort();
@@ -1045,7 +1055,7 @@ mod tests {
         nodes.insert("a".to_string(), ProjectNode {
             title: None, file: None, doc_type: None, children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes, doc_types: default_doc_types() };
+        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes, doc_types: default_doc_types(), tag_colors: HashMap::new(), status_colors: None };
         assert!(is_ancestor_or_self(&manifest, "a", "a"));
     }
 
@@ -1061,7 +1071,7 @@ mod tests {
         nodes.insert("c".to_string(), ProjectNode {
             title: None, file: None, doc_type: None, children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes, doc_types: default_doc_types() };
+        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes, doc_types: default_doc_types(), tag_colors: HashMap::new(), status_colors: None };
         assert!(!is_ancestor_or_self(&manifest, "a", "c"));
     }
 
@@ -1107,6 +1117,8 @@ mod tests {
             root: "node_root".to_string(),
             nodes,
             doc_types: default_doc_types(),
+            tag_colors: HashMap::new(),
+            status_colors: None,
         };
         save_manifest(&project, &manifest).unwrap();
 
@@ -1227,5 +1239,63 @@ mod tests {
         let (_tmp, project) = setup_backup_project();
         let result = restore_backup(&project, "node-1", "nonexistent");
         assert!(result.is_err());
+    }
+}
+
+#[cfg(test)]
+mod manifest_color_tests {
+    use super::*;
+
+    #[test]
+    fn manifest_loads_without_color_maps() {
+        let json = r#"{
+            "version": 1,
+            "root": "node_root",
+            "nodes": {}
+        }"#;
+        let manifest: ProjectManifest = serde_json::from_str(json).expect("should parse");
+        assert!(manifest.tag_colors.is_empty());
+        assert!(manifest.status_colors.is_none());
+    }
+
+    #[test]
+    fn manifest_loads_with_color_maps() {
+        let json = r##"{
+            "version": 1,
+            "root": "node_root",
+            "nodes": {},
+            "tag_colors": { "subplot-a": "#4a90e2" },
+            "status_colors": { "draft": "#888888" }
+        }"##;
+        let manifest: ProjectManifest = serde_json::from_str(json).expect("should parse");
+        assert_eq!(manifest.tag_colors.get("subplot-a"), Some(&"#4a90e2".to_string()));
+        let status = manifest.status_colors.expect("should have status_colors");
+        assert_eq!(status.get("draft"), Some(&"#888888".to_string()));
+    }
+
+    #[test]
+    fn manifest_omits_empty_color_maps_when_serializing() {
+        let mut manifest = ProjectManifest {
+            version: 1,
+            root: "root".to_string(),
+            nodes: HashMap::new(),
+            doc_types: Vec::new(),
+            tag_colors: HashMap::new(),
+            status_colors: None,
+        };
+        let json = serde_json::to_string(&manifest).expect("serialize");
+        // Empty maps / None should not bloat the manifest JSON
+        assert!(!json.contains("tag_colors"));
+        assert!(!json.contains("status_colors"));
+
+        manifest.tag_colors.insert("t".to_string(), "#fff".to_string());
+        let json = serde_json::to_string(&manifest).expect("serialize");
+        assert!(json.contains("tag_colors"));
+
+        let mut status_map = HashMap::new();
+        status_map.insert("draft".to_string(), "#888888".to_string());
+        manifest.status_colors = Some(status_map);
+        let json = serde_json::to_string(&manifest).expect("serialize");
+        assert!(json.contains("status_colors"));
     }
 }
