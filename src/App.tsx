@@ -14,6 +14,7 @@ import { DocTypeSettings } from "./components/DocTypeSettings";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { Onboarding } from "./components/Onboarding";
 import { useTheme } from "./useTheme";
+import { applyTheme } from "./themes/applyTheme";
 import { useProjectMetadata } from "./useProjectMetadata";
 import {
   getManuscriptDocTypes,
@@ -266,6 +267,13 @@ export default function App() {
     localStorage.setItem("loomdraft:onboarding_completed", "true");
     setShowOnboarding(false);
   }, []);
+
+  // ── Re-apply theme with per-project status color overrides ───────────────
+  useEffect(() => {
+    if (activeTheme) {
+      applyTheme(activeTheme, manifest?.status_colors ?? null);
+    }
+  }, [activeTheme, manifest?.status_colors]);
 
   // ── Theme/font operations with toast notifications ──────────────────────
   const handleImportTheme = useCallback(async () => {
