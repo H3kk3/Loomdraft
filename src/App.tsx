@@ -643,7 +643,11 @@ export default function App() {
   }
 
   return (
-    <div className={`layout${editorDistractionFree ? " focus-layout" : ""}`}>
+    <div
+      className={`layout${
+        editorDistractionFree || viewMode === "readthrough" ? " focus-layout" : ""
+      }`}
+    >
       {!editorDistractionFree && viewMode !== "readthrough" && (
         <Sidebar
           manifest={manifest}
