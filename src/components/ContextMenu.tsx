@@ -1,4 +1,6 @@
 import { useRef, useState, useEffect } from "react";
+import type { Status } from "../types";
+import { StatusSubmenu } from "./StatusSubmenu";
 
 export interface ContextMenuProps {
   nodeId: string;
@@ -9,6 +11,9 @@ export interface ContextMenuProps {
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  // v0.3 additions
+  currentStatus?: Status;
+  onSetStatus?: (nodeId: string, status: Status) => void;
 }
 
 export function ContextMenu({
@@ -20,6 +25,8 @@ export function ContextMenu({
   onRename,
   onDelete,
   onClose,
+  currentStatus,
+  onSetStatus,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [focusIdx, setFocusIdx] = useState(0);
@@ -72,7 +79,9 @@ export function ContextMenu({
       aria-label="Context menu"
       style={{
         position: "fixed",
-        top: Math.min(y, window.innerHeight - 160),
+        // 320 accommodates the full menu height when the status section is visible
+        // (3 action items + separator + section label + 6 status items). Update if menu grows.
+        top: Math.min(y, window.innerHeight - 320),
         left: Math.min(x, window.innerWidth - 160),
         zIndex: 200,
       }}
@@ -114,6 +123,18 @@ export function ContextMenu({
         >
           Delete…
         </button>
+      )}
+      {!isRoot && onSetStatus && (
+        <>
+          <div className="context-menu-separator" role="separator" />
+          <StatusSubmenu
+            current={currentStatus}
+            onSelect={(status) => {
+              onSetStatus(nodeId, status);
+              onClose();
+            }}
+          />
+        </>
       )}
     </div>
   );

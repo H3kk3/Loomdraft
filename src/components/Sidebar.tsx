@@ -548,6 +548,20 @@ export function Sidebar({
             setDeleteTarget(id);
           }}
           onClose={() => setContextMenu(null)}
+          currentStatus={metadataHandle?.metadata[contextMenu.nodeId]?.status}
+          onSetStatus={
+            metadataHandle
+              ? async (id, status) => {
+                  try {
+                    await metadataHandle.updateNode(id, { status });
+                  } catch (err) {
+                    // First mutation surface — at minimum log so failures aren't silent.
+                    // Future work: route through a toast/error-bar UI.
+                    console.error(`Failed to set status for ${id}:`, err);
+                  }
+                }
+              : undefined
+          }
         />
       )}
 
