@@ -312,9 +312,8 @@
 
 .tree-row.dragging {
   opacity: 0.5;
-  border-left: 3px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
-  transition: opacity 0.15s, border-left-color 0.15s;
+  transition: opacity 0.15s;
 }
 
 /* During an active drag, force grabbing cursor everywhere and prevent

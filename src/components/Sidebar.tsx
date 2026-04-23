@@ -509,6 +509,7 @@ export function Sidebar({
         <TreeNode
           nodeId={manifest.root}
           manifest={manifest}
+          metadata={metadataHandle?.metadata}
           selectedId={selectedId}
           draggingId={draggingId}
           dropTarget={dropTarget}
