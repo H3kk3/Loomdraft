@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useLayoutEffect } from "react";
 import type { Status } from "../types";
 import { StatusSubmenu } from "./StatusSubmenu";
 
@@ -32,6 +32,16 @@ export function ContextMenu({
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [focusIdx, setFocusIdx] = useState(0);
+  const [position, setPosition] = useState({ top: y, left: x });
+
+  useLayoutEffect(() => {
+    if (!menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    const margin = 8;
+    const top = Math.min(y, window.innerHeight - rect.height - margin);
+    const left = Math.min(x, window.innerWidth - rect.width - margin);
+    setPosition({ top: Math.max(margin, top), left: Math.max(margin, left) });
+  }, [x, y]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -81,10 +91,8 @@ export function ContextMenu({
       aria-label="Context menu"
       style={{
         position: "fixed",
-        // 320 accommodates the full menu height when the status section is visible
-        // (3 action items + separator + section label + 6 status items). Update if menu grows.
-        top: Math.min(y, window.innerHeight - 320),
-        left: Math.min(x, window.innerWidth - 160),
+        top: position.top,
+        left: position.left,
         zIndex: 200,
       }}
       onMouseDown={(e) => e.stopPropagation()}

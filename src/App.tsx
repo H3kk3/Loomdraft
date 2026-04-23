@@ -428,11 +428,10 @@ export default function App() {
         content,
       });
 
-      // v0.3: refresh metadata since save may have changed frontmatter (synopsis/tags/status)
-      // Guard against stale saves — only reload if we're still in the same project context.
-      if (projectPathRef.current === currentProjectPath) {
-        void metadataHandle.reload();
-      }
+      // v0.3: metadata changes flow exclusively through the v0.3 UI paths (status menu,
+      // tags editor), which update the hook's local state optimistically. Body saves via
+      // `save_document` don't touch frontmatter metadata fields, so no reload is needed
+      // here. If a future feature allows raw frontmatter editing, add a reload back.
 
       // Ignore stale async save responses if user already navigated away.
       if (selectedNodeIdRef.current === nodeId) {

@@ -179,4 +179,29 @@ status: in-revision\n\
         assert_eq!(parsed.tags, vec!["a".to_string(), "b".to_string()]);
         assert_eq!(parsed.status, Status::Final);
     }
+
+    /// Pair-locked test: if you change the `Status` variants or their serde representation,
+    /// update the list here AND `STATUS_VALUES` in `src/types.ts`. Both sides must stay in sync.
+    #[test]
+    fn status_variants_serialize_to_expected_kebab_strings() {
+        use serde_json;
+
+        let cases = [
+            (Status::Draft, "\"draft\""),
+            (Status::InRevision, "\"in-revision\""),
+            (Status::Revised, "\"revised\""),
+            (Status::Final, "\"final\""),
+            (Status::Stuck, "\"stuck\""),
+            (Status::Cut, "\"cut\""),
+        ];
+        for (variant, expected) in cases {
+            let serialized = serde_json::to_string(&variant).expect("serialize");
+            assert_eq!(serialized, expected, "Status::{:?} should serialize as {}", variant, expected);
+        }
+        // Reject drift by count: if someone adds a new variant without updating this test,
+        // they must also add it to the `cases` array above.
+        // (This doesn't catch additions automatically — Rust doesn't have exhaustive-enum
+        //  iteration by default — but the failing test in TS land will remind devs to update
+        //  both lists when a new variant lands.)
+    }
 }

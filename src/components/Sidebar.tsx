@@ -89,8 +89,16 @@ function computeVisibleNodes(
 ): Set<string> | null {
   if (!query.trim()) return null;
   const filter = parseFilterQuery(query);
-  const visible = new Set<string>();
 
+  // Build parent index once: O(N) where N = total nodes. Replaces O(N²) ancestor walks.
+  const parentIndex = new Map<string, string>();
+  for (const [parentId, node] of Object.entries(manifest.nodes)) {
+    for (const childId of node.children) {
+      parentIndex.set(childId, parentId);
+    }
+  }
+
+  const visible = new Set<string>();
   for (const [id, node] of Object.entries(manifest.nodes)) {
     const title = node.title ?? id;
     const docType = node.doc_type ?? "";
@@ -98,12 +106,10 @@ function computeVisibleNodes(
     const matchable = { title, doc_type: docType };
     if (matchesFilter(filter, matchable, meta)) {
       visible.add(id);
-      let current = id;
-      let parent = findParent(manifest, current);
-      while (parent) {
-        visible.add(parent);
-        current = parent;
-        parent = findParent(manifest, current);
+      let current: string | undefined = parentIndex.get(id);
+      while (current !== undefined) {
+        visible.add(current);
+        current = parentIndex.get(current);
       }
     }
   }
@@ -172,6 +178,7 @@ export interface SidebarProps {
   // Tag editor
   projectPath?: string;
   onManifestUpdate?: (manifest: ProjectManifest) => void;
+  onToast?: (message: string, type: "success" | "error") => void;
 }
 
 export function Sidebar({
@@ -201,6 +208,7 @@ export function Sidebar({
   metadataHandle,
   projectPath,
   onManifestUpdate,
+  onToast,
 }: SidebarProps) {
   const rootNode = manifest.nodes[manifest.root];
 
@@ -562,9 +570,9 @@ export function Sidebar({
                   try {
                     await metadataHandle.updateNode(id, { status });
                   } catch (err) {
-                    // First mutation surface — at minimum log so failures aren't silent.
-                    // Future work: route through a toast/error-bar UI.
+                    const msg = err instanceof Error ? err.message : String(err);
                     console.error(`Failed to set status for ${id}:`, err);
+                    onToast?.(`Failed to set status: ${msg}`, "error");
                   }
                 }
               : undefined
@@ -594,6 +602,7 @@ export function Sidebar({
             await metadataHandle.updateNode(tagsEditorFor, { tags: newTags });
           }}
           onManifestUpdate={onManifestUpdate}
+          onError={(msg) => onToast?.(msg, "error")}
           onClose={() => setTagsEditorFor(null)}
         />
       )}

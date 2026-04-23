@@ -4,13 +4,15 @@ mod db;
 mod error;
 mod export;
 mod frontmatter;
+mod metadata;
 mod project;
 mod theme;
 
 use db::SearchResult;
 use error::LoomdraftError;
 use frontmatter::Status;
-use project::{BackupEntry, DocTypeDefinition, DocumentContent, NodeMetadata, ProjectManifest};
+use metadata::NodeMetadata;
+use project::{BackupEntry, DocTypeDefinition, DocumentContent, ProjectManifest};
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -169,7 +171,7 @@ fn get_project_metadata(
 ) -> CmdResult<std::collections::HashMap<String, NodeMetadata>> {
     let path = PathBuf::from(&project_path);
     let manifest = project::load_manifest(&path)?;
-    Ok(project::collect_project_metadata(&path, &manifest))
+    Ok(metadata::collect_project_metadata(&path, &manifest))
 }
 
 /// Update a document's metadata (synopsis, tags, status).
@@ -193,7 +195,7 @@ fn update_node_metadata(
 ) -> CmdResult<NodeMetadata> {
     let path = PathBuf::from(&project_path);
     let manifest = project::load_manifest(&path)?;
-    Ok(project::update_node_metadata_on_disk(
+    Ok(metadata::update_node_metadata_on_disk(
         &path,
         &manifest,
         &node_id,
@@ -212,7 +214,7 @@ fn set_tag_color(
 ) -> CmdResult<ProjectManifest> {
     let path = PathBuf::from(&project_path);
     let mut manifest = project::load_manifest(&path)?;
-    project::apply_tag_color(&path, &mut manifest, &tag, color)?;
+    metadata::apply_tag_color(&path, &mut manifest, &tag, color)?;
     Ok(manifest)
 }
 
@@ -224,7 +226,7 @@ fn set_status_color(
 ) -> CmdResult<ProjectManifest> {
     let path = PathBuf::from(&project_path);
     let mut manifest = project::load_manifest(&path)?;
-    project::apply_status_color(&path, &mut manifest, &status, color)?;
+    metadata::apply_status_color(&path, &mut manifest, &status, color)?;
     Ok(manifest)
 }
 

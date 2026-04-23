@@ -88,159 +88,6 @@ pub struct DocumentContent {
     pub file: String,
 }
 
-// ── Node metadata ─────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NodeMetadata {
-    pub synopsis: Option<String>,
-    pub tags: Vec<String>,
-    pub status: Status,
-}
-
-impl Default for NodeMetadata {
-    fn default() -> Self {
-        Self {
-            synopsis: None,
-            tags: Vec::new(),
-            status: Status::default(),
-        }
-    }
-}
-
-pub fn collect_project_metadata(
-    project_path: &Path,
-    manifest: &ProjectManifest,
-) -> HashMap<String, NodeMetadata> {
-    let mut out = HashMap::new();
-    for (id, node) in &manifest.nodes {
-        let Some(file_rel) = &node.file else { continue };
-        let full = project_path.join(file_rel);
-        let raw = match fs::read_to_string(&full) {
-            Ok(raw) => raw,
-            Err(e) => {
-                eprintln!(
-                    "[warn] metadata: could not read {} for node {id}: {e}",
-                    full.display()
-                );
-                out.insert(id.clone(), NodeMetadata::default());
-                continue;
-            }
-        };
-        let (fm, _body) = match parse_frontmatter(&raw) {
-            Some(t) => t,
-            None => {
-                eprintln!(
-                    "[warn] metadata: unparseable frontmatter in {} for node {id}",
-                    full.display()
-                );
-                out.insert(id.clone(), NodeMetadata::default());
-                continue;
-            }
-        };
-        out.insert(
-            id.clone(),
-            NodeMetadata {
-                synopsis: fm.synopsis.clone(),
-                tags: fm.tags.clone(),
-                status: fm.status,
-            },
-        );
-    }
-    out
-}
-
-/// Updates the frontmatter of a single document in place.
-///
-/// Semantics (chosen to be compatible with default serde deserialization of Tauri command args,
-/// which cannot distinguish an absent field from an explicit `null`):
-/// - `tags: None` → leave tags unchanged. `tags: Some(vec![...])` → set to that list (pass `Some(vec![])` to clear).
-/// - `status: None` → leave unchanged. `Some(s)` → set.
-/// - Synopsis uses two parameters: `synopsis: Some(s)` sets to `s`; `clear_synopsis == true` clears it;
-///   both absent = leave unchanged. (`clear_synopsis` wins if both are passed.)
-pub fn update_node_metadata_on_disk(
-    project_path: &Path,
-    manifest: &ProjectManifest,
-    node_id: &str,
-    synopsis: Option<String>,
-    clear_synopsis: bool,
-    tags: Option<Vec<String>>,
-    status: Option<Status>,
-) -> Result<NodeMetadata, String> {
-    let node = manifest
-        .nodes
-        .get(node_id)
-        .ok_or_else(|| format!("Node '{node_id}' not found"))?;
-    let file_rel = node
-        .file
-        .as_ref()
-        .ok_or_else(|| format!("Node '{node_id}' has no associated file"))?;
-    let full = project_path.join(file_rel);
-
-    let raw = fs::read_to_string(&full).map_err(|e| format!("Cannot read {}: {e}", full.display()))?;
-    let (mut fm, body) = parse_frontmatter(&raw)
-        .ok_or_else(|| format!("Malformed frontmatter in {}", full.display()))?;
-
-    if clear_synopsis {
-        fm.synopsis = None;
-    } else if let Some(new_syn) = synopsis {
-        fm.synopsis = Some(new_syn);
-    }
-    if let Some(new_tags) = tags {
-        fm.tags = new_tags;
-    }
-    if let Some(new_status) = status {
-        fm.status = new_status;
-    }
-    fm.modified = Some(Utc::now().to_rfc3339());
-
-    let out = write_frontmatter(&fm, &body)?;
-    fs::write(&full, out).map_err(|e| format!("Cannot write {}: {e}", full.display()))?;
-
-    Ok(NodeMetadata {
-        synopsis: fm.synopsis,
-        tags: fm.tags,
-        status: fm.status,
-    })
-}
-
-pub fn apply_tag_color(
-    project_path: &Path,
-    manifest: &mut ProjectManifest,
-    tag: &str,
-    color: Option<String>,
-) -> Result<(), String> {
-    match color {
-        Some(c) => {
-            manifest.tag_colors.insert(tag.to_string(), c);
-        }
-        None => {
-            manifest.tag_colors.remove(tag);
-        }
-    }
-    save_manifest(project_path, manifest)
-}
-
-pub fn apply_status_color(
-    project_path: &Path,
-    manifest: &mut ProjectManifest,
-    status: &str,
-    color: Option<String>,
-) -> Result<(), String> {
-    let map = manifest.status_colors.get_or_insert_with(HashMap::new);
-    match color {
-        Some(c) => {
-            map.insert(status.to_string(), c);
-        }
-        None => {
-            map.remove(status);
-            if map.is_empty() {
-                manifest.status_colors = None;
-            }
-        }
-    }
-    save_manifest(project_path, manifest)
-}
-
 // ── Project creation ──────────────────────────────────────────────────────────
 
 pub fn create_project(dir: &Path, name: &str) -> Result<(PathBuf, ProjectManifest), String> {
@@ -306,6 +153,20 @@ pub fn save_manifest(project_path: &Path, manifest: &ProjectManifest) -> Result<
         .map_err(|e| format!("Cannot serialize manifest: {e}"))?;
     fs::write(&tmp_path, &raw).map_err(|e| format!("Cannot write project.json.tmp: {e}"))?;
     fs::rename(&tmp_path, &path).map_err(|e| format!("Cannot finalize project.json: {e}"))
+}
+
+/// Atomically writes `content` to `target` by writing to a sibling `.tmp` file
+/// and renaming. Prevents partial writes if the process dies mid-write.
+pub(crate) fn atomic_write(target: &Path, content: &str) -> Result<(), String> {
+    let tmp = {
+        let mut t = target.to_path_buf();
+        let original_ext = t.extension().and_then(|e| e.to_str()).unwrap_or("").to_string();
+        t.set_extension(format!("{original_ext}.tmp"));
+        t
+    };
+    fs::write(&tmp, content).map_err(|e| format!("Cannot write {}: {e}", tmp.display()))?;
+    fs::rename(&tmp, target).map_err(|e| format!("Cannot rename {} to {}: {e}", tmp.display(), target.display()))?;
+    Ok(())
 }
 
 // ── Backup system ──────────────────────────────────────────────────────────────
@@ -543,9 +404,7 @@ pub fn save_document(
     fm.modified = Some(Utc::now().to_rfc3339());
 
     let raw = write_frontmatter(&fm, content)?;
-    let tmp_path = file_path.with_extension("md.tmp");
-    fs::write(&tmp_path, &raw).map_err(|e| format!("Cannot write temp file: {e}"))?;
-    fs::rename(&tmp_path, &file_path).map_err(|e| format!("Cannot finalize file: {e}"))?;
+    atomic_write(&file_path, &raw)?;
 
     // Keep manifest title in sync
     if let Some(n) = manifest.nodes.get_mut(node_id) {
@@ -655,8 +514,7 @@ pub fn add_node(
         status: Status::default(),
     };
     let raw = write_frontmatter(&fm, "")?;
-    fs::write(project_path.join(&file_rel), raw)
-        .map_err(|e| format!("Cannot create document file: {e}"))?;
+    atomic_write(&project_path.join(&file_rel), &raw)?;
 
     manifest.nodes.insert(
         node_id.clone(),
@@ -846,8 +704,7 @@ pub fn rename_node(
             if let Some((mut fm, body)) = parse_frontmatter(&raw) {
                 fm.title = new_title.to_string();
                 fm.modified = Some(Utc::now().to_rfc3339());
-                fs::write(&file_path, write_frontmatter(&fm, &body)?)
-                    .map_err(|e| e.to_string())?;
+                atomic_write(&file_path, &write_frontmatter(&fm, &body)?)?;
             }
         }
     }
@@ -1393,6 +1250,18 @@ mod tests {
         let result = restore_backup(&project, "node-1", "nonexistent");
         assert!(result.is_err());
     }
+
+    #[test]
+    fn atomic_write_roundtrips() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("test.md");
+        atomic_write(&target, "hello").expect("write");
+        let content = std::fs::read_to_string(&target).unwrap();
+        assert_eq!(content, "hello");
+        // The .tmp file should not persist
+        let tmp = dir.path().join("test.md.tmp");
+        assert!(!tmp.exists());
+    }
 }
 
 #[cfg(test)]
@@ -1450,186 +1319,5 @@ mod manifest_color_tests {
         manifest.status_colors = Some(status_map);
         let json = serde_json::to_string(&manifest).expect("serialize");
         assert!(json.contains("status_colors"));
-    }
-}
-
-#[cfg(test)]
-mod metadata_tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    fn write_doc(dir: &std::path::Path, rel: &str, content: &str) {
-        let full = dir.join(rel);
-        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
-        std::fs::write(full, content).unwrap();
-    }
-
-    #[test]
-    fn collect_metadata_reads_synopsis_tags_status() {
-        let dir = tempdir().unwrap();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join("manuscript")).unwrap();
-        std::fs::create_dir_all(root.join("kb")).unwrap();
-
-        write_doc(
-            root,
-            "manuscript/scene--a.md",
-            "---\n\
-id: node_a\n\
-type: scene\n\
-title: A\n\
-synopsis: Elena meets the stranger.\n\
-tags:\n  - foreshadowing\n\
-status: draft\n\
----\n\nBody",
-        );
-        write_doc(
-            root,
-            "manuscript/scene--b.md",
-            "---\nid: node_b\ntype: scene\ntitle: B\n---\n\nOld body",
-        );
-
-        let mut nodes = std::collections::HashMap::new();
-        nodes.insert(
-            "node_a".to_string(),
-            ProjectNode {
-                title: Some("A".into()),
-                file: Some("manuscript/scene--a.md".into()),
-                doc_type: Some("scene".into()),
-                children: vec![],
-            },
-        );
-        nodes.insert(
-            "node_b".to_string(),
-            ProjectNode {
-                title: Some("B".into()),
-                file: Some("manuscript/scene--b.md".into()),
-                doc_type: Some("scene".into()),
-                children: vec![],
-            },
-        );
-        let manifest = ProjectManifest {
-            version: 1,
-            root: "node_root".into(),
-            nodes,
-            doc_types: default_doc_types(),
-            tag_colors: Default::default(),
-            status_colors: None,
-        };
-
-        let meta = collect_project_metadata(root, &manifest);
-        let a = meta.get("node_a").expect("should have node_a");
-        assert_eq!(a.synopsis.as_deref(), Some("Elena meets the stranger."));
-        assert_eq!(a.tags, vec!["foreshadowing".to_string()]);
-        assert_eq!(a.status, Status::Draft);
-
-        let b = meta.get("node_b").expect("should have node_b");
-        assert_eq!(b.synopsis, None);
-        assert!(b.tags.is_empty());
-        assert_eq!(b.status, Status::Draft); // default
-    }
-
-    #[test]
-    fn update_metadata_writes_frontmatter() {
-        let dir = tempdir().unwrap();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join("manuscript")).unwrap();
-        std::fs::create_dir_all(root.join("kb")).unwrap();
-
-        write_doc(
-            root,
-            "manuscript/scene--a.md",
-            "---\nid: node_a\ntype: scene\ntitle: A\n---\n\nBody",
-        );
-
-        let mut nodes = std::collections::HashMap::new();
-        nodes.insert(
-            "node_a".to_string(),
-            ProjectNode {
-                title: Some("A".into()),
-                file: Some("manuscript/scene--a.md".into()),
-                doc_type: Some("scene".into()),
-                children: vec![],
-            },
-        );
-        let manifest = ProjectManifest {
-            version: 1,
-            root: "node_root".into(),
-            nodes,
-            doc_types: default_doc_types(),
-            tag_colors: Default::default(),
-            status_colors: None,
-        };
-        let _ = save_manifest(root, &manifest);
-
-        let updated = update_node_metadata_on_disk(
-            root,
-            &manifest,
-            "node_a",
-            Some("The encounter".into()),
-            false,
-            Some(vec!["foreshadowing".into(), "subplot-a".into()]),
-            Some(Status::InRevision),
-        )
-        .expect("should update");
-        assert_eq!(updated.synopsis.as_deref(), Some("The encounter"));
-        assert_eq!(updated.tags, vec!["foreshadowing".to_string(), "subplot-a".to_string()]);
-        assert_eq!(updated.status, Status::InRevision);
-
-        // File reads back with new frontmatter
-        let raw = std::fs::read_to_string(root.join("manuscript/scene--a.md")).unwrap();
-        let (fm, body) = parse_frontmatter(&raw).expect("parse");
-        assert_eq!(fm.synopsis.as_deref(), Some("The encounter"));
-        assert_eq!(fm.status, Status::InRevision);
-        assert!(body.contains("Body"));
-    }
-
-    #[test]
-    fn set_and_remove_tag_color_round_trip() {
-        let dir = tempdir().unwrap();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join(".app")).unwrap();
-
-        let mut manifest = ProjectManifest {
-            version: 1,
-            root: "node_root".into(),
-            nodes: HashMap::new(),
-            doc_types: default_doc_types(),
-            tag_colors: Default::default(),
-            status_colors: None,
-        };
-        let _ = save_manifest(root, &manifest);
-
-        apply_tag_color(root, &mut manifest, "subplot-a", Some("#4a90e2".into()))
-            .expect("set");
-        assert_eq!(manifest.tag_colors.get("subplot-a"), Some(&"#4a90e2".to_string()));
-
-        apply_tag_color(root, &mut manifest, "subplot-a", None).expect("clear");
-        assert!(manifest.tag_colors.get("subplot-a").is_none());
-    }
-
-    #[test]
-    fn set_and_remove_status_color_round_trip() {
-        let dir = tempdir().unwrap();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join(".app")).unwrap();
-
-        let mut manifest = ProjectManifest {
-            version: 1,
-            root: "node_root".into(),
-            nodes: HashMap::new(),
-            doc_types: default_doc_types(),
-            tag_colors: Default::default(),
-            status_colors: None,
-        };
-        let _ = save_manifest(root, &manifest);
-
-        apply_status_color(root, &mut manifest, "draft", Some("#888888".into()))
-            .expect("set");
-        let map = manifest.status_colors.as_ref().expect("should be Some");
-        assert_eq!(map.get("draft"), Some(&"#888888".to_string()));
-
-        apply_status_color(root, &mut manifest, "draft", None).expect("clear");
-        assert!(manifest.status_colors.is_none(), "should revert to None when last entry removed");
     }
 }

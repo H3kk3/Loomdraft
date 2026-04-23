@@ -24,6 +24,7 @@ export interface TagsEditorProps {
   currentTags: string[];
   onSave: (tags: string[]) => Promise<void>;
   onManifestUpdate: (manifest: ProjectManifest) => void;
+  onError?: (message: string) => void;
   onClose: () => void;
 }
 
@@ -33,6 +34,7 @@ export function TagsEditor({
   currentTags,
   onSave,
   onManifestUpdate,
+  onError,
   onClose,
 }: TagsEditorProps) {
   const [tags, setTags] = useState<string[]>(currentTags);
@@ -65,7 +67,9 @@ export function TagsEditor({
       });
       onManifestUpdate(updated);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(`Failed to set color for tag "${tag}":`, err);
+      onError?.(`Failed to save color for "${tag}": ${msg}`);
     }
   };
 
@@ -74,7 +78,9 @@ export function TagsEditor({
       await onSave(tags);
       onClose();
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("Failed to save tags:", err);
+      onError?.(`Failed to save tags: ${msg}`);
     }
   };
 
