@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { ProjectManifest, DocumentContent, ExportResult } from "./types";
+import type { ProjectManifest, DocumentContent, ExportResult, TemplateId } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { Editor } from "./components/Editor";
 import { NewProjectDialog, AddNodeDialog } from "./components/Dialogs";
@@ -14,6 +14,7 @@ import { DocTypeSettings } from "./components/DocTypeSettings";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { Onboarding } from "./components/Onboarding";
 import { Corkboard } from "./components/Corkboard";
+import { ReadThrough } from "./components/ReadThrough";
 import { TagsEditor } from "./components/TagsEditor";
 import { useTheme } from "./useTheme";
 import { useCorkboardData } from "./useCorkboardData";
@@ -235,7 +236,7 @@ export default function App() {
     resetFont,
   } = useTheme();
   const [projectPath, setProjectPath] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"editor" | "corkboard">("editor");
+  const [viewMode, setViewMode] = useState<"editor" | "corkboard" | "readthrough">("editor");
   const [corkboardDensity, setCorkboardDensity] = useState<"compact" | "comfortable" | "full">("comfortable");
   const metadataHandle = useProjectMetadata(projectPath);
   const corkboardHandle = useCorkboardData(projectPath, viewMode === "corkboard");
@@ -345,6 +346,10 @@ export default function App() {
         e.preventDefault();
         if (projectPath) setViewMode((v) => (v === "corkboard" ? "editor" : "corkboard"));
       }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "r" || e.key === "R")) {
+        e.preventDefault();
+        if (projectPath) setViewMode((v) => (v === "readthrough" ? "editor" : "readthrough"));
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -374,15 +379,23 @@ export default function App() {
 
   // ── Project actions ──────────────────────────────────────────────────────
 
-  const handleNewProjectConfirm = async (dir: string, name: string) => {
+  const handleNewProjectConfirm = async (dir: string, name: string, template: TemplateId) => {
     setShowNewProject(false);
     setLoading(true);
     try {
-      const [path, mf] = await invoke<[string, ProjectManifest]>("create_project", { dir, name });
+      const [path, mf] =
+        template === "blank"
+          ? await invoke<[string, ProjectManifest]>("create_project", { dir, name })
+          : await invoke<[string, ProjectManifest]>("create_project_from_template", {
+              dir,
+              name,
+              templateId: template,
+            });
       setProjectPath(path);
       setManifest(mf);
       setSelectedNodeId(null);
       setDocument(null);
+      setViewMode("editor");
       addRecentProject(path);
     } catch (e) {
       setError(String(e));
@@ -400,6 +413,7 @@ export default function App() {
       setManifest(mf);
       setSelectedNodeId(null);
       setDocument(null);
+      setViewMode("editor");
       addRecentProject(dir);
     } catch (e) {
       setError(String(e));
@@ -630,7 +644,7 @@ export default function App() {
 
   return (
     <div className={`layout${editorDistractionFree ? " focus-layout" : ""}`}>
-      {!editorDistractionFree && (
+      {!editorDistractionFree && viewMode !== "readthrough" && (
         <Sidebar
           manifest={manifest}
           selectedId={selectedNodeId}
@@ -643,6 +657,7 @@ export default function App() {
           onClose={handleCloseProject}
           onSearch={() => setShowSearch(true)}
           onDocTypeSettings={() => setShowDocTypeSettings(true)}
+          onEnterReadThrough={() => setViewMode("readthrough")}
           theme={theme}
           onToggleTheme={toggleTheme}
           activeThemeId={activeThemeId}
@@ -677,7 +692,22 @@ export default function App() {
             ))}
           </div>
         )}
-        {viewMode === "corkboard" ? (
+        {viewMode === "readthrough" ? (
+          projectPath ? (
+            <ReadThrough
+              projectPath={projectPath}
+              onJumpToDoc={(id) => {
+                setViewMode("editor");
+                handleSelectNode(id);
+              }}
+              onExit={() => setViewMode("editor")}
+            />
+          ) : (
+            <div className="readthrough-view">
+              <p className="readthrough-status">Open a project to read through.</p>
+            </div>
+          )
+        ) : viewMode === "corkboard" ? (
           corkboardHandle.loading || !corkboardHandle.data || !manifest ? (
             <div className="corkboard-view" role="region" aria-label="Loading corkboard">
               <p style={{ padding: 24, color: "var(--text-dim)" }}>Loading corkboard…</p>

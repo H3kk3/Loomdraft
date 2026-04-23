@@ -36,6 +36,8 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: "Writing Modes",
     shortcuts: [
       { keys: `${mod}+Shift+D`, label: "Distraction-free mode" },
+      { keys: `${mod}+Shift+B`, label: "Corkboard view" },
+      { keys: `${mod}+Shift+R`, label: "Read-through mode" },
       { keys: `${mod}+Alt+T`, label: "Typewriter mode" },
       { keys: `${mod}+Alt+F`, label: "Focus mode" },
       { keys: `${mod}+Alt+W`, label: "Soft wrap" },

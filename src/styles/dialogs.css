@@ -16,6 +16,8 @@
   border-radius: 10px;
   padding: 24px;
   min-width: 320px;
+  max-width: 480px;
+  width: 420px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -79,6 +81,13 @@
   font-family: var(--font-mono);
   color: var(--accent-h);
   word-break: break-all;
+}
+
+.template-description {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 4px 0 8px;
+  font-style: italic;
 }
 
 /* ── Delete confirmation dialog ────────────────────────────────────────────── */
@@ -383,6 +392,58 @@ button.danger-btn:hover {
 .vh-restore-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.vh-entry-actions {
+  display: flex;
+  gap: 6px;
+  align-self: flex-end;
+}
+
+.vh-entry-subtime {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.vh-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin: 8px 0 4px;
+  padding: 0 2px;
+}
+
+.vh-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vh-entry--snapshot {
+  background: var(--bg-3);
+}
+
+.vh-pin-form {
+  display: flex;
+  gap: 6px;
+  padding: 6px 0 2px;
+}
+
+.vh-pin-input {
+  flex: 1;
+  font-size: 12px;
+  padding: 3px 7px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+.vh-pin-input:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 /* ── Theme Picker ──────────────────────────────────────────────────────────── */

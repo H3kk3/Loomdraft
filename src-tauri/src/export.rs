@@ -33,6 +33,7 @@ use crate::project::{is_manuscript_doc_type, DocTypeDefinition, ProjectManifest}
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ManuscriptSegment {
+    pub node_id: String, // v0.3 Plan C: used by read-through click-to-jump
     pub title: String,
     pub doc_type: String,
     pub body: String,
@@ -108,6 +109,7 @@ fn collect_dfs(
 
             let hl = lookup_heading_level(&manifest.doc_types, doc_type);
             segments.push(ManuscriptSegment {
+                node_id: node_id.to_string(),
                 title,
                 doc_type: doc_type.to_string(),
                 body: body.trim().to_string(),
@@ -245,16 +247,28 @@ pub fn render_markdown(segments: &[ManuscriptSegment]) -> String {
 
 // ── HTML export ──────────────────────────────────────────────────────────────
 
-pub fn render_html(segments: &[ManuscriptSegment], project_path: &Path) -> String {
+/// Render just the manuscript body HTML — headings + content, with `data-node-id`
+/// attributes for click-to-jump. NO document wrapper, NO embedded `<style>`, NO
+/// table-of-contents nav. This is what the in-app read-through view consumes;
+/// `render_html` wraps this with a full HTML document + CSS + TOC for external
+/// export.
+pub fn render_html_body(segments: &[ManuscriptSegment], project_path: &Path) -> String {
     let toc = build_toc(segments);
 
-    // 1. Build markdown with anchor IDs on headings
+    // 1. Build markdown with anchor IDs and data-node-id on headings.
+    // We emit raw HTML headings (safe because options.render.unsafe_ = true)
+    // so that data-node-id is preserved in the final HTML output.
     let mut parts: Vec<String> = Vec::new();
     for (i, seg) in segments.iter().enumerate() {
-        let prefix = heading_prefix_for_level(seg.heading_level);
-        // Use explicit anchor + heading so comrak converts to proper HTML
+        let level = seg.heading_level;
         let anchor = format!("<a id=\"{}\"></a>", toc[i].anchor);
-        let heading = format!("{}\n\n{} {}", anchor, prefix, seg.title);
+        let heading = format!(
+            "{}\n\n<h{level} data-node-id=\"{node_id}\">{title}</h{level}>",
+            anchor,
+            level = level,
+            node_id = html_escape(&seg.node_id),
+            title = html_escape(&seg.title),
+        );
 
         if seg.body.is_empty() {
             parts.push(heading);
@@ -278,9 +292,16 @@ pub fn render_html(segments: &[ManuscriptSegment], project_path: &Path) -> Strin
     let html_body = markdown_to_html(&md, &options);
 
     // 4. Embed images as base64 data URIs
-    let html_body = embed_images(&html_body, project_path);
+    embed_images(&html_body, project_path)
+}
 
-    // 5. Build HTML TOC nav
+pub fn render_html(segments: &[ManuscriptSegment], project_path: &Path) -> String {
+    let toc = build_toc(segments);
+
+    // Body content (headings + paragraphs + data-node-id attrs).
+    let html_body = render_html_body(segments, project_path);
+
+    // TOC nav HTML
     let toc_html = build_html_toc(&toc);
 
     // 7. Get project title from first segment or fallback
@@ -1107,12 +1128,14 @@ mod tests {
     fn render_markdown_basic() {
         let segments = vec![
             ManuscriptSegment {
+                node_id: "node-1".to_string(),
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: "Opening paragraph.".to_string(),
                 heading_level: 1,
             },
             ManuscriptSegment {
+                node_id: "node-2".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: "Chapter body with [[Aiko]].".to_string(),
@@ -1130,6 +1153,7 @@ mod tests {
     #[test]
     fn render_markdown_empty_body() {
         let segments = vec![ManuscriptSegment {
+            node_id: "node-empty".to_string(),
             title: "Empty".to_string(),
             doc_type: "scene".to_string(),
             body: String::new(),
@@ -1151,18 +1175,21 @@ mod tests {
     fn build_toc_generates_entries() {
         let segments = vec![
             ManuscriptSegment {
+                node_id: "node-part".to_string(),
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: String::new(),
                 heading_level: 1,
             },
             ManuscriptSegment {
+                node_id: "node-chap".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
                 heading_level: 2,
             },
             ManuscriptSegment {
+                node_id: "node-scene".to_string(),
                 title: "Opening".to_string(),
                 doc_type: "scene".to_string(),
                 body: String::new(),
@@ -1182,12 +1209,14 @@ mod tests {
     fn build_toc_deduplicates_anchors() {
         let segments = vec![
             ManuscriptSegment {
+                node_id: "node-c1".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
                 heading_level: 2,
             },
             ManuscriptSegment {
+                node_id: "node-c2".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
@@ -1203,12 +1232,14 @@ mod tests {
     fn render_markdown_includes_toc() {
         let segments = vec![
             ManuscriptSegment {
+                node_id: "node-toc-1".to_string(),
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: "text".to_string(),
                 heading_level: 1,
             },
             ManuscriptSegment {
+                node_id: "node-toc-2".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: "text".to_string(),
@@ -1225,12 +1256,14 @@ mod tests {
     fn build_html_toc_generates_nav() {
         let toc = build_toc(&vec![
             ManuscriptSegment {
+                node_id: "node-html-1".to_string(),
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: String::new(),
                 heading_level: 1,
             },
             ManuscriptSegment {
+                node_id: "node-html-2".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),

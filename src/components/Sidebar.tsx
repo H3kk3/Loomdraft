@@ -159,6 +159,7 @@ export interface SidebarProps {
   onClose: () => void;
   onSearch: () => void;
   onDocTypeSettings: () => void;
+  onEnterReadThrough: () => void;
   theme: Theme;
   onToggleTheme: () => void;
   // Extended theme system
@@ -191,6 +192,7 @@ export function Sidebar({
   onClose,
   onSearch,
   onDocTypeSettings,
+  onEnterReadThrough,
   theme: _theme,
   onToggleTheme: _onToggleTheme,
   activeThemeId,
@@ -459,6 +461,13 @@ export function Sidebar({
           </button>
           <button className="icon-btn" title="Export manuscript" onClick={onExport}>
             <Download size={15} strokeWidth={1.75} />
+          </button>
+          <button
+            className="icon-btn"
+            title={`Read through manuscript (${mod}+Shift+R)`}
+            onClick={onEnterReadThrough}
+          >
+            <BookOpen size={15} strokeWidth={1.75} />
           </button>
           <button className="icon-btn" title="Close project" onClick={onClose}>
             ×

@@ -7,6 +7,8 @@ mod export;
 mod frontmatter;
 mod metadata;
 mod project;
+mod snapshots;
+mod templates;
 mod theme;
 
 use corkboard::CorkboardData;
@@ -15,6 +17,7 @@ use error::LoomdraftError;
 use frontmatter::Status;
 use metadata::NodeMetadata;
 use project::{BackupEntry, DocTypeDefinition, DocumentContent, ProjectManifest};
+use snapshots::SnapshotEntry;
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -40,6 +43,32 @@ fn create_project(dir: String, name: String) -> CmdResult<(String, ProjectManife
     db::reindex(&conn, &path, &manifest)?;
 
     Ok((path.to_string_lossy().to_string(), manifest))
+}
+
+#[tauri::command]
+fn create_project_from_template(
+    dir: String,
+    name: String,
+    template_id: String,
+) -> CmdResult<(String, ProjectManifest)> {
+    let (path, manifest) = project::create_project(&PathBuf::from(&dir), name.trim())?;
+    let path_str = path.to_str().ok_or_else(|| {
+        LoomdraftError::Validation("Project path contains invalid characters".into())
+    })?;
+
+    // Index the blank project first.
+    let conn = db::open_db(&db_path(path_str))?;
+    db::reindex(&conn, &path, &manifest)?;
+
+    if template_id == "blank" {
+        return Ok((path.to_string_lossy().to_string(), manifest));
+    }
+
+    // Apply the template's node scaffolding.
+    let populated = templates::apply_template(&template_id, &path)?;
+    // Re-index after scaffolding adds nodes.
+    db::reindex(&conn, &path, &populated)?;
+    Ok((path.to_string_lossy().to_string(), populated))
 }
 
 #[tauri::command]
@@ -480,6 +509,66 @@ fn restore_backup(
     Ok(doc)
 }
 
+// ── Snapshots (v0.3 Plan C) ──────────────────────────────────────────────────
+
+#[tauri::command]
+fn pin_snapshot(
+    project_path: String,
+    node_id: String,
+    timestamp: String,
+    name: String,
+) -> CmdResult<SnapshotEntry> {
+    Ok(snapshots::pin_snapshot(
+        &PathBuf::from(&project_path),
+        &node_id,
+        &timestamp,
+        &name,
+    )?)
+}
+
+#[tauri::command]
+fn unpin_snapshot(
+    project_path: String,
+    node_id: String,
+    snapshot_timestamp: String,
+) -> CmdResult<()> {
+    Ok(snapshots::unpin_snapshot(
+        &PathBuf::from(&project_path),
+        &node_id,
+        &snapshot_timestamp,
+    )?)
+}
+
+#[tauri::command]
+fn list_snapshots(project_path: String, node_id: String) -> CmdResult<Vec<SnapshotEntry>> {
+    Ok(snapshots::list_snapshots(
+        &PathBuf::from(&project_path),
+        &node_id,
+    )?)
+}
+
+#[tauri::command]
+fn restore_snapshot(
+    project_path: String,
+    node_id: String,
+    snapshot_timestamp: String,
+) -> CmdResult<DocumentContent> {
+    let doc = snapshots::restore_snapshot(
+        &PathBuf::from(&project_path),
+        &node_id,
+        &snapshot_timestamp,
+    )?;
+    // Re-index the restored content (mirror `restore_backup`'s behavior).
+    if let Ok(conn) = db::open_db(&db_path(&project_path)) {
+        let links = project::extract_wiki_links(&doc.content);
+        let _ = db::index_document(
+            &conn, &doc.id, &doc.doc_type, &doc.title, &doc.file, &doc.content, None,
+        );
+        let _ = db::update_links(&conn, &doc.id, &links);
+    }
+    Ok(doc)
+}
+
 // ── Export commands ──────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -549,6 +638,19 @@ fn export_manuscript(
         word_count,
         section_count: segments.len(),
     })
+}
+
+#[tauri::command]
+fn get_read_through_html(project_path: String) -> CmdResult<String> {
+    let path = PathBuf::from(&project_path);
+    let manifest = project::load_manifest(&path)?;
+    let segments = export::collect_manuscript_ordered(&manifest, &path);
+    if segments.is_empty() {
+        return Ok(String::new());
+    }
+    // Use body-only renderer (no embedded <style>, no TOC card, no <html> wrapper).
+    // The frontend's readthrough.css owns all the typography.
+    Ok(export::render_html_body(&segments, &path))
 }
 
 // ── Theme & font commands ────────────────────────────────────────────────────
@@ -659,6 +761,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             create_project,
+            create_project_from_template,
             open_project,
             get_project_tree,
             load_document,
@@ -684,8 +787,14 @@ pub fn run() {
             import_image,
             read_image_base64,
             export_manuscript,
+            get_read_through_html,
             list_backups,
             restore_backup,
+            // Snapshots (v0.3 Plan C)
+            pin_snapshot,
+            unpin_snapshot,
+            list_snapshots,
+            restore_snapshot,
             // Theme & font commands
             get_app_data_dir,
             list_custom_themes,

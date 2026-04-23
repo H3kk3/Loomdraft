@@ -98,3 +98,31 @@ export interface CorkboardCard {
 export interface CorkboardData {
   cards: Record<string, CorkboardCard>;
 }
+
+// v0.3 Plan C — Project templates
+
+export type TemplateId = "blank" | "novel" | "short-story" | "game-narrative" | "screenplay";
+
+export interface TemplateInfo {
+  id: TemplateId;
+  label: string;
+  description: string;
+}
+
+export const TEMPLATES: TemplateInfo[] = [
+  { id: "blank", label: "Blank", description: "Empty project — start from scratch." },
+  { id: "novel", label: "Novel", description: "3 Parts, 3 Chapters each, 2 Scenes per chapter." },
+  { id: "short-story", label: "Short Story", description: "5 Scenes and a couple of characters." },
+  { id: "game-narrative", label: "Game Narrative", description: "Quests, NPCs, lore, items — for videogame writers." },
+  { id: "screenplay", label: "Screenplay", description: "3 Acts, 3 Scenes per act, a lead and a location." },
+];
+
+// v0.3 Plan C — Named snapshots
+
+export interface SnapshotEntry {
+  node_id: string;
+  timestamp: string;
+  name: string;
+  size_bytes: number;
+  preview: string;
+}
