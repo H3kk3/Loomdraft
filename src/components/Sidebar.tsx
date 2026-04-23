@@ -55,6 +55,7 @@ import { DRAG_THRESHOLD_PX } from "../constants";
 import { TreeNode, type DropTarget, type DropPos } from "./TreeNode";
 import { ContextMenu } from "./ContextMenu";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { TagsEditor } from "./TagsEditor";
 import { mod } from "../utils/platform";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -168,6 +169,9 @@ export interface SidebarProps {
   onResetFont: (target: "ui" | "mono") => void;
   // Provides project metadata (status, tags, synopsis) for filtering + future consumers (tree status strip, context menus).
   metadataHandle?: ProjectMetadataHandle;
+  // Tag editor
+  projectPath?: string;
+  onManifestUpdate?: (manifest: ProjectManifest) => void;
 }
 
 export function Sidebar({
@@ -195,6 +199,8 @@ export function Sidebar({
   onImportFont,
   onResetFont,
   metadataHandle,
+  projectPath,
+  onManifestUpdate,
 }: SidebarProps) {
   const rootNode = manifest.nodes[manifest.root];
 
@@ -403,6 +409,7 @@ export function Sidebar({
   } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [tagsEditorFor, setTagsEditorFor] = useState<string | null>(null);
 
   // ── Stable callback refs for TreeNode (prevent memo-busting) ─────────────
 
@@ -562,6 +569,7 @@ export function Sidebar({
                 }
               : undefined
           }
+          onEditTags={metadataHandle ? (id) => setTagsEditorFor(id) : undefined}
         />
       )}
 
@@ -574,6 +582,19 @@ export function Sidebar({
             onDeleteNode(id);
           }}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {tagsEditorFor && projectPath && metadataHandle && onManifestUpdate && (
+        <TagsEditor
+          projectPath={projectPath}
+          manifest={manifest}
+          currentTags={metadataHandle.metadata[tagsEditorFor]?.tags ?? []}
+          onSave={async (newTags) => {
+            await metadataHandle.updateNode(tagsEditorFor, { tags: newTags });
+          }}
+          onManifestUpdate={onManifestUpdate}
+          onClose={() => setTagsEditorFor(null)}
         />
       )}
     </aside>

@@ -14,6 +14,7 @@ export interface ContextMenuProps {
   // v0.3 additions
   currentStatus?: Status;
   onSetStatus?: (nodeId: string, status: Status) => void;
+  onEditTags?: (nodeId: string) => void;
 }
 
 export function ContextMenu({
@@ -27,6 +28,7 @@ export function ContextMenu({
   onClose,
   currentStatus,
   onSetStatus,
+  onEditTags,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [focusIdx, setFocusIdx] = useState(0);
@@ -122,6 +124,18 @@ export function ContextMenu({
           }}
         >
           Delete…
+        </button>
+      )}
+      {!isRoot && onEditTags && (
+        <button
+          className="context-menu-item"
+          role="menuitem"
+          onClick={() => {
+            onEditTags(nodeId);
+            onClose();
+          }}
+        >
+          Edit tags…
         </button>
       )}
       {!isRoot && onSetStatus && (

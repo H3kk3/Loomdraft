@@ -629,6 +629,8 @@ export default function App() {
           onImportFont={handleImportFont}
           onResetFont={resetFont}
           metadataHandle={metadataHandle}
+          projectPath={projectPath}
+          onManifestUpdate={setManifest}
         />
       )}
 

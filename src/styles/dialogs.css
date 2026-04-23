@@ -1006,6 +1006,81 @@ button.danger-btn:hover {
   border-color: var(--accent);
 }
 
+/* ── Tags editor ──────────────────────────────────────────────────────────── */
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 12px 0;
+}
+
+.tag-list-empty {
+  margin: 4px 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 6px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  font-size: 13px;
+}
+
+.tag-color-swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  flex-shrink: 0;
+}
+
+.tag-color-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.tag-color-swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+.tag-chip-label {
+  color: var(--text);
+}
+
+.tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.tag-chip-remove:hover {
+  background: var(--bg);
+  color: var(--danger);
+}
+
 /* ── Keyboard shortcuts panel ────────────────────────────────────────────── */
 
 .shortcuts-panel {
