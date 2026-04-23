@@ -55,7 +55,6 @@ import { DRAG_THRESHOLD_PX } from "../constants";
 import { TreeNode, type DropTarget, type DropPos } from "./TreeNode";
 import { ContextMenu } from "./ContextMenu";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
-import { TagsEditor } from "./TagsEditor";
 import { mod } from "../utils/platform";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -176,9 +175,8 @@ export interface SidebarProps {
   // Provides project metadata (status, tags, synopsis) for filtering + future consumers (tree status strip, context menus).
   metadataHandle?: ProjectMetadataHandle;
   // Tag editor
-  projectPath?: string;
-  onManifestUpdate?: (manifest: ProjectManifest) => void;
   onToast?: (message: string, type: "success" | "error") => void;
+  onEditTags?: (nodeId: string) => void;
 }
 
 export function Sidebar({
@@ -206,9 +204,8 @@ export function Sidebar({
   onImportFont,
   onResetFont,
   metadataHandle,
-  projectPath,
-  onManifestUpdate,
   onToast,
+  onEditTags,
 }: SidebarProps) {
   const rootNode = manifest.nodes[manifest.root];
 
@@ -417,7 +414,6 @@ export function Sidebar({
   } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [tagsEditorFor, setTagsEditorFor] = useState<string | null>(null);
 
   // ── Stable callback refs for TreeNode (prevent memo-busting) ─────────────
 
@@ -577,7 +573,7 @@ export function Sidebar({
                 }
               : undefined
           }
-          onEditTags={metadataHandle ? (id) => setTagsEditorFor(id) : undefined}
+          onEditTags={metadataHandle ? onEditTags : undefined}
         />
       )}
 
@@ -593,19 +589,6 @@ export function Sidebar({
         />
       )}
 
-      {tagsEditorFor && projectPath && metadataHandle && onManifestUpdate && (
-        <TagsEditor
-          projectPath={projectPath}
-          manifest={manifest}
-          currentTags={metadataHandle.metadata[tagsEditorFor]?.tags ?? []}
-          onSave={async (newTags) => {
-            await metadataHandle.updateNode(tagsEditorFor, { tags: newTags });
-          }}
-          onManifestUpdate={onManifestUpdate}
-          onError={(msg) => onToast?.(msg, "error")}
-          onClose={() => setTagsEditorFor(null)}
-        />
-      )}
     </aside>
   );
 }

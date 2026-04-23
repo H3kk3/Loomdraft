@@ -13,7 +13,10 @@ import { ToastStack, createToast, type ToastData } from "./components/Toast";
 import { DocTypeSettings } from "./components/DocTypeSettings";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { Onboarding } from "./components/Onboarding";
+import { Corkboard } from "./components/Corkboard";
+import { TagsEditor } from "./components/TagsEditor";
 import { useTheme } from "./useTheme";
+import { useCorkboardData } from "./useCorkboardData";
 import { applyTheme } from "./themes/applyTheme";
 import { useProjectMetadata } from "./useProjectMetadata";
 import {
@@ -232,7 +235,10 @@ export default function App() {
     resetFont,
   } = useTheme();
   const [projectPath, setProjectPath] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"editor" | "corkboard">("editor");
+  const [corkboardDensity, setCorkboardDensity] = useState<"compact" | "comfortable" | "full">("comfortable");
   const metadataHandle = useProjectMetadata(projectPath);
+  const corkboardHandle = useCorkboardData(projectPath, viewMode === "corkboard");
   const [manifest, setManifest] = useState<ProjectManifest | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [document, setDocument] = useState<DocumentContent | null>(null);
@@ -252,6 +258,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(
     () => !localStorage.getItem("loomdraft:onboarding_completed"),
   );
+  const [tagsEditorFor, setTagsEditorFor] = useState<string | null>(null);
   const selectedNodeIdRef = useRef<string | null>(null);
   const projectPathRef = useRef<string | null>(null);
 
@@ -267,6 +274,15 @@ export default function App() {
     localStorage.setItem("loomdraft:onboarding_completed", "true");
     setShowOnboarding(false);
   }, []);
+
+  // When metadata mutates while corkboard is active, refresh corkboard data.
+  useEffect(() => {
+    if (viewMode === "corkboard") {
+      void corkboardHandle.reload();
+    }
+    // Only depend on metadata identity and viewMode — corkboardHandle.reload is stable via useCallback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metadataHandle.metadata, viewMode]);
 
   // ── Re-apply theme with per-project status color overrides ───────────────
   useEffect(() => {
@@ -324,6 +340,10 @@ export default function App() {
       ) {
         e.preventDefault();
         setShowShortcuts((v) => !v);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        if (projectPath) setViewMode((v) => (v === "corkboard" ? "editor" : "corkboard"));
       }
     };
     window.addEventListener("keydown", handler);
@@ -636,13 +656,13 @@ export default function App() {
           onImportFont={handleImportFont}
           onResetFont={resetFont}
           metadataHandle={metadataHandle}
-          projectPath={projectPath}
-          onManifestUpdate={setManifest}
+          onEditTags={(id) => setTagsEditorFor(id)}
+          onToast={showToast}
         />
       )}
 
       <main className="main">
-        {document && selectedNodeId && !editorDistractionFree && (
+        {viewMode === "editor" && document && selectedNodeId && !editorDistractionFree && (
           <div className="breadcrumb">
             {buildBreadcrumb(manifest, selectedNodeId).map((crumb, i, arr) => (
               <span key={crumb.id}>
@@ -657,7 +677,58 @@ export default function App() {
             ))}
           </div>
         )}
-        {document ? (
+        {viewMode === "corkboard" ? (
+          corkboardHandle.loading || !corkboardHandle.data || !manifest ? (
+            <div className="corkboard-view" role="region" aria-label="Loading corkboard">
+              <p style={{ padding: 24, color: "var(--text-dim)" }}>Loading corkboard…</p>
+            </div>
+          ) : (
+            <Corkboard
+              manifest={manifest}
+              metadata={metadataHandle.metadata}
+              data={corkboardHandle.data}
+              density={corkboardDensity}
+              onDensityChange={setCorkboardDensity}
+              selectedId={selectedNodeId}
+              tagColors={manifest.tag_colors ?? {}}
+              onSelect={setSelectedNodeId}
+              onOpen={(id) => {
+                setViewMode("editor");
+                handleSelectNode(id);
+              }}
+              currentStatusFor={(id) => metadataHandle.metadata[id]?.status}
+              onSetStatus={async (id, status) => {
+                try {
+                  await metadataHandle.updateNode(id, { status });
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  showToast(`Failed to set status: ${msg}`, "error");
+                }
+              }}
+              onEditTags={(id) => setTagsEditorFor(id)}
+              onReorder={async (cardId, newParentId, position) => {
+                if (!projectPath) return;
+                // Clamp position to sibling count defensively (backend also clamps).
+                const parent = manifest?.nodes[newParentId];
+                const siblingCount = parent?.children.length ?? 0;
+                const safePosition = Math.max(0, Math.min(position, siblingCount));
+                try {
+                  const updated = await invoke<ProjectManifest>("move_node", {
+                    projectPath,
+                    nodeId: cardId,
+                    newParentId,
+                    position: safePosition,
+                  });
+                  setManifest(updated);
+                  void corkboardHandle.reload();
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  showToast(`Move failed: ${msg}`, "error");
+                }
+              }}
+            />
+          )
+        ) : document ? (
           <Editor
             doc={document}
             onSave={handleSaveDocument}
@@ -791,6 +862,20 @@ export default function App() {
       {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
+
+      {tagsEditorFor && projectPath && manifest && metadataHandle && (
+        <TagsEditor
+          projectPath={projectPath}
+          manifest={manifest}
+          currentTags={metadataHandle.metadata[tagsEditorFor]?.tags ?? []}
+          onSave={async (newTags) => {
+            await metadataHandle.updateNode(tagsEditorFor, { tags: newTags });
+          }}
+          onManifestUpdate={setManifest}
+          onError={(msg) => showToast(msg, "error")}
+          onClose={() => setTagsEditorFor(null)}
+        />
+      )}
     </div>
   );
 }

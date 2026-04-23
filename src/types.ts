@@ -82,3 +82,19 @@ export interface BackupEntry {
 }
 
 export type DocType = string;
+
+// v0.3 Plan B — Corkboard
+
+export interface CorkboardCard {
+  id: string;
+  title: string;
+  doc_type: string;
+  synopsis: string;
+  word_count: number;
+  status: Status;
+  tags: string[];
+}
+
+export interface CorkboardData {
+  cards: Record<string, CorkboardCard>;
+}

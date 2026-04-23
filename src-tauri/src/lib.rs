@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 
+mod corkboard;
 mod db;
 mod error;
 mod export;
@@ -8,6 +9,7 @@ mod metadata;
 mod project;
 mod theme;
 
+use corkboard::CorkboardData;
 use db::SearchResult;
 use error::LoomdraftError;
 use frontmatter::Status;
@@ -228,6 +230,15 @@ fn set_status_color(
     let mut manifest = project::load_manifest(&path)?;
     metadata::apply_status_color(&path, &mut manifest, &status, color)?;
     Ok(manifest)
+}
+
+// ── Corkboard (v0.3 Plan B) ──────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_corkboard_data(project_path: String) -> CmdResult<CorkboardData> {
+    let path = PathBuf::from(&project_path);
+    let manifest = project::load_manifest(&path)?;
+    Ok(corkboard::collect_corkboard_data(&path, &manifest))
 }
 
 // ── Search & index commands ───────────────────────────────────────────────────
@@ -661,6 +672,8 @@ pub fn run() {
             update_node_metadata,
             set_tag_color,
             set_status_color,
+            // Corkboard (v0.3 Plan B)
+            get_corkboard_data,
             search_documents,
             get_backlinks,
             reindex_project,
