@@ -26,12 +26,14 @@ static RE_HR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^[-*_]{3,}\s*$
 // Re-alias the image crate to avoid conflict with printpdf::image module.
 use ::image as img_crate;
 
-use crate::project::{is_manuscript_doc_type, parse_frontmatter, DocTypeDefinition, ProjectManifest};
+use crate::frontmatter::parse_frontmatter;
+use crate::project::{is_manuscript_doc_type, DocTypeDefinition, ProjectManifest};
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ManuscriptSegment {
+    pub node_id: String, // v0.3 Plan C: used by read-through click-to-jump
     pub title: String,
     pub doc_type: String,
     pub body: String,
@@ -107,6 +109,7 @@ fn collect_dfs(
 
             let hl = lookup_heading_level(&manifest.doc_types, doc_type);
             segments.push(ManuscriptSegment {
+                node_id: node_id.to_string(),
                 title,
                 doc_type: doc_type.to_string(),
                 body: body.trim().to_string(),
@@ -219,20 +222,21 @@ pub fn render_markdown(segments: &[ManuscriptSegment]) -> String {
     }
     toc_lines.push(String::new()); // blank line after TOC
 
-    // Build content sections
+    // Build content sections.
+    // We re-emit explicit `<a id="slug"></a>` anchor targets before each
+    // heading so the TOC bullet links resolve on renderers that don't
+    // auto-slugify headings, and so non-ASCII titles (where our slugifier
+    // diverges from GitHub's) still land on the right section.
     let mut parts: Vec<String> = Vec::new();
     for (i, seg) in segments.iter().enumerate() {
         let prefix = heading_prefix_for_level(seg.heading_level);
-        let heading = format!("{} {}", prefix, seg.title);
-
-        // Add anchor target (GitHub-compatible — headings auto-generate anchors,
-        // but we add explicit <a> for non-standard renderers)
-        let anchor_tag = format!("<a id=\"{}\"></a>\n\n", toc[i].anchor);
+        let anchor = format!("<a id=\"{}\"></a>", toc[i].anchor);
+        let heading = format!("{}\n\n{} {}", anchor, prefix, seg.title);
 
         if seg.body.is_empty() {
-            parts.push(format!("{}{}", anchor_tag, heading));
+            parts.push(heading);
         } else {
-            parts.push(format!("{}{}\n\n{}", anchor_tag, heading, seg.body));
+            parts.push(format!("{}\n\n{}", heading, seg.body));
         }
     }
 
@@ -244,16 +248,28 @@ pub fn render_markdown(segments: &[ManuscriptSegment]) -> String {
 
 // ── HTML export ──────────────────────────────────────────────────────────────
 
-pub fn render_html(segments: &[ManuscriptSegment], project_path: &Path) -> String {
+/// Render just the manuscript body HTML — headings + content, with `data-node-id`
+/// attributes for click-to-jump. NO document wrapper, NO embedded `<style>`, NO
+/// table-of-contents nav. This is what the in-app read-through view consumes;
+/// `render_html` wraps this with a full HTML document + CSS + TOC for external
+/// export.
+pub fn render_html_body(segments: &[ManuscriptSegment], project_path: &Path) -> String {
     let toc = build_toc(segments);
 
-    // 1. Build markdown with anchor IDs on headings
+    // 1. Build markdown with anchor IDs and data-node-id on headings.
+    // We emit raw HTML headings (safe because options.render.unsafe_ = true)
+    // so that data-node-id is preserved in the final HTML output.
     let mut parts: Vec<String> = Vec::new();
     for (i, seg) in segments.iter().enumerate() {
-        let prefix = heading_prefix_for_level(seg.heading_level);
-        // Use explicit anchor + heading so comrak converts to proper HTML
+        let level = seg.heading_level;
         let anchor = format!("<a id=\"{}\"></a>", toc[i].anchor);
-        let heading = format!("{}\n\n{} {}", anchor, prefix, seg.title);
+        let heading = format!(
+            "{}\n\n<h{level} data-node-id=\"{node_id}\">{title}</h{level}>",
+            anchor,
+            level = level,
+            node_id = html_escape(&seg.node_id),
+            title = html_escape(&seg.title),
+        );
 
         if seg.body.is_empty() {
             parts.push(heading);
@@ -277,9 +293,16 @@ pub fn render_html(segments: &[ManuscriptSegment], project_path: &Path) -> Strin
     let html_body = markdown_to_html(&md, &options);
 
     // 4. Embed images as base64 data URIs
-    let html_body = embed_images(&html_body, project_path);
+    embed_images(&html_body, project_path)
+}
 
-    // 5. Build HTML TOC nav
+pub fn render_html(segments: &[ManuscriptSegment], project_path: &Path) -> String {
+    let toc = build_toc(segments);
+
+    // Body content (headings + paragraphs + data-node-id attrs).
+    let html_body = render_html_body(segments, project_path);
+
+    // TOC nav HTML
     let toc_html = build_html_toc(&toc);
 
     // 7. Get project title from first segment or fallback
@@ -309,150 +332,219 @@ pub fn render_html(segments: &[ManuscriptSegment], project_path: &Path) -> Strin
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{title} — Manuscript</title>
 <style>
+/* ── Base ── */
+*, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
 body {{
-  font-family: "Georgia", "Times New Roman", "Palatino", serif;
-  max-width: 42em;
-  margin: 2em auto;
-  padding: 0 1.5em;
-  line-height: 1.8;
-  color: #1a1a1a;
-  font-size: 16px;
-  background: #fff;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Palatino", Georgia, ui-serif, serif;
+  font-size: 18px;
+  line-height: 1.68;
+  letter-spacing: 0.003em;
+  font-feature-settings: "onum" 1, "liga" 1, "dlig" 1, "kern" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  color: #1a1a2e;
+  background: #fdfcfa;
+  max-width: 64ch;
+  margin: 0 auto;
+  padding: 72px 32px 120px;
 }}
-h1, h2, h3 {{
-  font-family: "Georgia", serif;
-  margin-top: 2em;
-  margin-bottom: 0.5em;
+
+/* Links: headings get anchors; they must never look like links */
+a, a:link, a:visited, a:hover {{
+  color: inherit;
+  text-decoration: none;
 }}
+
+/* H1 — book / part title */
 h1 {{
-  font-size: 2em;
-  text-align: center;
-  page-break-before: always;
-  margin-top: 3em;
-}}
-h1:first-child {{
-  page-break-before: avoid;
-  margin-top: 1em;
-}}
-h2 {{
-  font-size: 1.5em;
-  page-break-before: always;
-}}
-h3 {{
-  font-size: 1.17em;
-  margin-top: 1.5em;
-}}
-p {{
-  margin: 0.8em 0;
-}}
-blockquote {{
-  margin: 1em 2em;
+  margin: 1em auto 3em;
+  padding-bottom: 0.8em;
+  max-width: 20ch;
+  font-size: 2.1em;
+  font-weight: 500;
   font-style: italic;
-  color: #555;
-  border-left: 3px solid #ccc;
-  padding-left: 1em;
+  text-align: center;
+  letter-spacing: -0.005em;
+  border-bottom: 1px solid #d0cfc8;
+  page-break-before: always;
 }}
+h1:first-child, h1:first-of-type {{ page-break-before: avoid; margin-top: 0.5em; }}
+
+/* H2 — chapter */
+h2 {{
+  margin: 4em auto 1.5em;
+  font-size: 0.88em;
+  font-weight: 500;
+  font-style: normal;
+  text-transform: uppercase;
+  text-align: center;
+  letter-spacing: 0.28em;
+  color: #6b6b80;
+  page-break-before: always;
+}}
+h2::before {{
+  content: "";
+  display: block;
+  width: 2.5em;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.4;
+  margin: 0 auto 1.2em;
+}}
+h2:first-child {{ page-break-before: avoid; }}
+
+/* H3 — scene */
+h3 {{
+  margin: 2.8em auto 1em;
+  font-size: 1em;
+  font-weight: 500;
+  font-style: italic;
+  text-align: center;
+  letter-spacing: 0.01em;
+  opacity: 0.85;
+}}
+
+/* Paragraphs — classical book typography */
+p {{
+  margin: 0;
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  text-indent: 1.6em;
+}}
+
+/* First paragraph after heading or rule: no indent */
+h1 + p, h2 + p, h3 + p, hr + p, .manuscript-body > p:first-of-type {{
+  text-indent: 0;
+}}
+
+/* Small-caps first line on the very first paragraph of the manuscript body */
+.manuscript-body > p:first-of-type::first-line {{
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.04em;
+  font-size: 1.02em;
+}}
+
+/* Scene breaks: asterism */
 hr {{
   border: none;
   text-align: center;
-  margin: 2em 0;
+  margin: 2.6em 0;
+  height: 1em;
+  overflow: visible;
+  position: relative;
 }}
 hr::after {{
-  content: "* \00a0 * \00a0 *";
-  color: #888;
-  font-size: 1.1em;
+  content: "⁂";
+  color: #6b6b80;
+  font-size: 1.3em;
   letter-spacing: 0.2em;
+  opacity: 0.6;
 }}
+
+/* Blockquote */
+blockquote {{
+  margin: 1.8em 0 1.8em 1.5em;
+  padding-left: 1.25em;
+  border-left: 2px solid #c8c7bf;
+  color: #6b6b80;
+  font-style: italic;
+}}
+blockquote p {{ text-indent: 0; }}
+
+/* TOC nav */
+nav.toc {{
+  margin: 3em auto 4em;
+  padding: 2em 2.5em;
+  max-width: 44ch;
+  border: 1px solid #d8d6cf;
+  border-radius: 4px;
+  background: #f7f5f2;
+  text-align: center;
+  page-break-after: always;
+}}
+nav.toc h2 {{
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.78em;
+  color: #6b6b80;
+  margin: 0 0 1.5em;
+  page-break-before: avoid;
+}}
+nav.toc h2::before {{ display: none; }}
+nav.toc ul {{ list-style: none; padding: 0; }}
+nav.toc li {{ margin: 0.35em 0; line-height: 1.5; }}
+nav.toc li.toc-h1 {{ font-weight: 500; font-style: italic; font-size: 1.05em; margin-top: 0.8em; }}
+nav.toc li.toc-h2 {{ font-size: 0.88em; text-transform: uppercase; letter-spacing: 0.12em; color: #6b6b80; }}
+nav.toc li.toc-h3 {{ font-size: 0.88em; font-style: italic; opacity: 0.75; }}
+nav.toc a {{ color: inherit; text-decoration: none; }}
+
+/* Images */
+img {{ max-width: 100%; height: auto; display: block; margin: 2em auto; }}
+
+/* Inline code */
 code {{
-  font-family: "Menlo", "Consolas", monospace;
+  font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   font-size: 0.9em;
-  background: #f5f5f5;
-  padding: 0.15em 0.3em;
+  background: #f0ede8;
+  padding: 0.1em 0.35em;
   border-radius: 3px;
 }}
 pre {{
-  background: #f5f5f5;
-  padding: 1em;
+  background: #f0ede8;
+  padding: 1em 1.25em;
   border-radius: 4px;
   overflow-x: auto;
-  line-height: 1.5;
+  font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  line-height: 1.55;
+  margin: 1.5em 0;
 }}
-pre code {{
-  background: none;
-  padding: 0;
-}}
-img {{
-  max-width: 100%;
-  height: auto;
-  display: block;
-  margin: 1em 0;
-}}
+pre code {{ background: transparent; padding: 0; }}
+
+em, i {{ font-style: italic; }}
+strong, b {{ font-weight: 600; }}
+
+/* Tables */
 table {{
   border-collapse: collapse;
-  margin: 1em 0;
+  margin: 1.5em 0;
   width: 100%;
+  font-size: 0.95em;
 }}
 th, td {{
-  border: 1px solid #ddd;
+  border-bottom: 1px solid #e0ded7;
   padding: 0.5em 0.75em;
   text-align: left;
 }}
 th {{
-  background: #f5f5f5;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.85em;
+  color: #6b6b80;
 }}
-em {{ font-style: italic; }}
-strong {{ font-weight: bold; }}
-nav.toc {{
-  margin: 2em 0 3em;
-  padding: 1.5em 2em;
-  background: #f9f9f9;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-}}
-nav.toc h2 {{
-  margin: 0 0 0.8em;
-  font-size: 1.2em;
-  page-break-before: avoid;
-}}
-nav.toc ul {{
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}}
-nav.toc li {{
-  margin: 0.2em 0;
-  line-height: 1.6;
-}}
-nav.toc li.toc-h2 {{ padding-left: 1.2em; }}
-nav.toc li.toc-h3 {{ padding-left: 2.4em; font-size: 0.95em; }}
-nav.toc a {{
-  color: #1a1a1a;
-  text-decoration: none;
-  border-bottom: 1px dotted #ccc;
-}}
-nav.toc a:hover {{
-  color: #4a4adf;
-  border-bottom-color: #4a4adf;
-}}
+
+/* Print / PDF-via-browser */
 @media print {{
-  body {{
-    max-width: none;
-    margin: 0;
-    padding: 0;
-    font-size: 12pt;
-    line-height: 1.6;
-  }}
+  body {{ max-width: none; margin: 0; padding: 0.5in 0.8in; font-size: 12pt; background: white; }}
+  nav.toc {{ page-break-after: always; }}
   h1 {{ page-break-before: always; }}
   h1:first-child {{ page-break-before: avoid; }}
   h2 {{ page-break-before: always; }}
-  img {{ max-width: 80%; }}
+  h2:first-child {{ page-break-before: avoid; }}
+  h3 {{ page-break-inside: avoid; }}
+  p {{ orphans: 3; widows: 3; }}
+  img {{ max-width: 80%; page-break-inside: avoid; }}
 }}
 </style>
 </head>
 <body>
 {toc}
+<div class="manuscript-body">
 {body}
+</div>
 </body>
 </html>"#,
         title = html_escape(project_title),
@@ -501,7 +593,7 @@ fn build_html_toc(entries: &[TocEntry]) -> String {
         return String::new();
     }
     let mut lines = vec![
-        "<nav class=\"toc\">".to_string(),
+        "<nav class=\"toc\" role=\"navigation\" aria-label=\"Table of contents\">".to_string(),
         "<h2>Table of Contents</h2>".to_string(),
         "<ul>".to_string(),
     ];
@@ -644,18 +736,9 @@ impl PdfWriter {
         }
     }
 
-    /// Write a single line at the current position.
-    fn write_line(&mut self, text: &str, size: f32, font: &IndirectFontRef) {
-        let line_h = size * 0.42; // approximate mm height
-        self.ensure_space(line_h);
-        self.current_layer
-            .use_text(text, size, Mm(MARGIN_L), Mm(self.y), font);
-        self.y -= line_h;
-    }
-
     /// Write text centred horizontally.
     fn write_centered(&mut self, text: &str, size: f32, font: &IndirectFontRef) {
-        let approx_width = text.len() as f32 * size * 0.25;
+        let approx_width = text.len() as f32 * size * 0.26;
         let x = ((PAGE_W - approx_width) / 2.0).max(MARGIN_L);
         self.ensure_space(size * 0.42);
         self.current_layer
@@ -663,14 +746,42 @@ impl PdfWriter {
         self.y -= size * 0.42;
     }
 
+    /// Draw a centered horizontal rule of width `width_mm` at the current y
+    /// position, then advance y by 2 mm of breathing room.
+    /// Calls `ensure_space` first so the rule never clips against the bottom
+    /// margin; safe to call from any position.
+    fn write_h_rule_centered(&mut self, width_mm: f32) {
+        self.ensure_space(2.0);
+        let x_start = (PAGE_W - width_mm) / 2.0;
+        let x_end = (PAGE_W + width_mm) / 2.0;
+        let line = Line {
+            points: vec![
+                (Point::new(Mm(x_start), Mm(self.y)), false),
+                (Point::new(Mm(x_end), Mm(self.y)), false),
+            ],
+            is_closed: false,
+        };
+        self.current_layer.add_line(line);
+        self.skip(2.0);
+    }
+
     /// Word-wrap and write a paragraph of body text.
-    fn write_paragraph(&mut self, text: &str, size: f32, font: &IndirectFontRef) {
+    ///
+    /// When `indent_first_line` is `true` the first wrapped line is indented
+    /// 8 mm (≈ 1.6 em at 12 pt) to match classical book typography. Subsequent
+    /// continuation lines are always flush-left.
+    fn write_paragraph(&mut self, text: &str, size: f32, font: &IndirectFontRef, indent_first_line: bool) {
         let max_chars = estimate_chars_per_line(size);
         let lines = word_wrap(text, max_chars);
-        for line in &lines {
+        for (i, line) in lines.iter().enumerate() {
             self.ensure_space(LINE_H);
+            let x = if i == 0 && indent_first_line {
+                MARGIN_L + 8.0
+            } else {
+                MARGIN_L
+            };
             self.current_layer
-                .use_text(line.as_str(), size, Mm(MARGIN_L), Mm(self.y), font);
+                .use_text(line.as_str(), size, Mm(x), Mm(self.y), font);
             self.y -= LINE_H;
         }
     }
@@ -818,6 +929,11 @@ fn parse_content_blocks(body: &str) -> Vec<ContentBlock> {
 }
 
 /// Strip inline markdown formatting so the PDF gets clean plain text.
+///
+/// Horizontal rules (`---`, `***`, `___`) are replaced with the sentinel
+/// `"\x00SCENE_BREAK\x00"` rather than deleted. This is an internal PDF-only
+/// contract: `render_pdf` is the only caller and detects the sentinel in its
+/// paragraph loop to emit a centred `* * *` scene-break ornament.
 fn strip_markdown_formatting(text: &str) -> String {
     let mut s = text.to_string();
 
@@ -835,14 +951,28 @@ fn strip_markdown_formatting(text: &str) -> String {
     s = RE_CODE.replace_all(&s, "$1").to_string();
     // Heading markers
     s = RE_HEADING.replace_all(&s, "").to_string();
-    // Horizontal rules
-    s = RE_HR.replace_all(&s, "").to_string();
+    // Horizontal rules → scene-break sentinel (detected by render_pdf)
+    s = RE_HR.replace_all(&s, "\x00SCENE_BREAK\x00").to_string();
     // Wiki-links [[target]] → target
     s = RE_WIKI_LINK.replace_all(&s, "$1").to_string();
     // Image size syntax (already handled by image strip, but just in case)
     s = RE_IMG_SIZE.replace_all(&s, "![$1]").to_string();
 
     s
+}
+
+/// Format an integer with thousand-separator commas: 45000 → "45,000".
+fn format_thousands(n: usize) -> String {
+    let s = n.to_string();
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len() + s.len() / 3);
+    for (i, b) in bytes.iter().enumerate() {
+        if i > 0 && (bytes.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(*b as char);
+    }
+    out
 }
 
 /// Render manuscript segments into a PDF byte buffer.
@@ -855,12 +985,14 @@ pub fn render_pdf(
 
     // ── Title page ──────────────────────────────────────────────────────────
 
-    w.y = PAGE_H / 2.0 + 10.0;
-    w.write_centered(title, H1_SIZE, &w.font_bold.clone());
+    w.y = PAGE_H * 0.55; // slightly above midpoint — classical book placement
+    w.write_centered(title, H1_SIZE, &w.font_italic.clone());
     w.skip(8.0);
-
-    let section_summary = format!("{} sections", segments.len());
-    w.write_centered(&section_summary, BODY_SIZE, &w.font_italic.clone());
+    w.write_h_rule_centered(30.0);
+    w.skip(6.0);
+    let word_count: usize = segments.iter().map(|s| s.body.split_whitespace().count()).sum();
+    let word_count_line = format!("approx. {} words", format_thousands(word_count));
+    w.write_centered(&word_count_line, BODY_SIZE, &w.font_regular.clone());
 
     // ── Table of Contents page ──────────────────────────────────────────────
 
@@ -899,25 +1031,41 @@ pub fn render_pdf(
     w.new_page();
 
     for (i, seg) in segments.iter().enumerate() {
-        // Page break before H1/H2 headings (except the very first segment)
-        if i > 0 && seg.heading_level <= 2 {
-            w.new_page();
-        } else if i > 0 {
-            w.skip(LINE_H * 2.0);
+        // Section heading
+        match seg.heading_level {
+            1 => {
+                if i > 0 {
+                    w.new_page();
+                }
+                w.skip(LINE_H);
+                w.write_centered(&seg.title, H1_SIZE, &w.font_italic.clone());
+                w.skip(LINE_H * 2.0);
+            }
+            2 => {
+                if i > 0 {
+                    w.new_page();
+                }
+                w.skip(LINE_H * 2.0);
+                w.write_h_rule_centered(20.0);
+                w.skip(LINE_H * 0.5);
+                w.write_centered(&seg.title.to_uppercase(), H2_SIZE, &w.font_bold.clone());
+                w.skip(LINE_H * 2.0);
+            }
+            _ => {
+                if i > 0 {
+                    w.skip(LINE_H * 2.0);
+                }
+                w.write_centered(&seg.title, H3_SIZE, &w.font_italic.clone());
+                w.skip(LINE_H);
+            }
         }
 
-        // Section heading
-        let (size, font) = match seg.heading_level {
-            1 => (H1_SIZE, w.font_bold.clone()),
-            2 => (H2_SIZE, w.font_bold.clone()),
-            _ => (H3_SIZE, w.font_bold.clone()),
-        };
-        w.ensure_space(12.0);
-        w.write_line(&seg.title, size, &font);
-        w.skip(LINE_H);
-
-        // Body: split into text runs and inline images
+        // Body: split into text runs and inline images.
+        // `next_para_no_indent` starts true after every heading so the first
+        // paragraph of a section is flush-left; it also resets to true after a
+        // scene break, and becomes false after every normal paragraph.
         let blocks = parse_content_blocks(&seg.body);
+        let mut next_para_no_indent = true;
         for block in &blocks {
             match block {
                 ContentBlock::Text(text) => {
@@ -927,11 +1075,24 @@ pub fn render_pdf(
                         if trimmed.is_empty() {
                             continue;
                         }
-                        w.write_paragraph(trimmed, BODY_SIZE, &w.font_regular.clone());
+
+                        if trimmed == "\x00SCENE_BREAK\x00" {
+                            // Scene break: a line of space, centred ornament, more space.
+                            w.skip(LINE_H);
+                            w.write_centered("* * *", BODY_SIZE, &w.font_regular.clone());
+                            w.skip(LINE_H * 1.5);
+                            next_para_no_indent = true; // first para after break is un-indented
+                            continue;
+                        }
+
+                        let indent = !next_para_no_indent;
+                        w.write_paragraph(trimmed, BODY_SIZE, &w.font_regular.clone(), indent);
                         w.skip(LINE_H * 0.5);
+                        next_para_no_indent = false;
                     }
                 }
                 ContentBlock::Image { path } => {
+                    // Images don't affect the indent flag.
                     w.write_image(project_path, path);
                 }
             }
@@ -1106,12 +1267,14 @@ mod tests {
     fn render_markdown_basic() {
         let segments = vec![
             ManuscriptSegment {
+                node_id: "node-1".to_string(),
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: "Opening paragraph.".to_string(),
                 heading_level: 1,
             },
             ManuscriptSegment {
+                node_id: "node-2".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: "Chapter body with [[Aiko]].".to_string(),
@@ -1124,11 +1287,17 @@ mod tests {
         // Wiki links should be stripped
         assert!(md.contains("Chapter body with Aiko."));
         assert!(!md.contains("[["));
+        // Explicit <a id> anchor targets ensure TOC links resolve across
+        // renderers that don't auto-slugify headings (see commit restoring
+        // these after the first removal attempt).
+        assert!(md.contains("<a id=\"part-one\"></a>"));
+        assert!(md.contains("<a id=\"chapter-1\"></a>"));
     }
 
     #[test]
     fn render_markdown_empty_body() {
         let segments = vec![ManuscriptSegment {
+            node_id: "node-empty".to_string(),
             title: "Empty".to_string(),
             doc_type: "scene".to_string(),
             body: String::new(),
@@ -1150,18 +1319,21 @@ mod tests {
     fn build_toc_generates_entries() {
         let segments = vec![
             ManuscriptSegment {
+                node_id: "node-part".to_string(),
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: String::new(),
                 heading_level: 1,
             },
             ManuscriptSegment {
+                node_id: "node-chap".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
                 heading_level: 2,
             },
             ManuscriptSegment {
+                node_id: "node-scene".to_string(),
                 title: "Opening".to_string(),
                 doc_type: "scene".to_string(),
                 body: String::new(),
@@ -1181,12 +1353,14 @@ mod tests {
     fn build_toc_deduplicates_anchors() {
         let segments = vec![
             ManuscriptSegment {
+                node_id: "node-c1".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
                 heading_level: 2,
             },
             ManuscriptSegment {
+                node_id: "node-c2".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
@@ -1202,12 +1376,14 @@ mod tests {
     fn render_markdown_includes_toc() {
         let segments = vec![
             ManuscriptSegment {
+                node_id: "node-toc-1".to_string(),
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: "text".to_string(),
                 heading_level: 1,
             },
             ManuscriptSegment {
+                node_id: "node-toc-2".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: "text".to_string(),
@@ -1218,18 +1394,23 @@ mod tests {
         assert!(md.contains("## Table of Contents"));
         assert!(md.contains("[Part One](#part-one)"));
         assert!(md.contains("[Chapter 1](#chapter-1)"));
+        // Explicit <a id> anchor targets back the TOC links on renderers that
+        // don't auto-slugify headings, and for non-ASCII titles.
+        assert!(md.contains("<a id=\"part-one\"></a>"));
     }
 
     #[test]
     fn build_html_toc_generates_nav() {
         let toc = build_toc(&vec![
             ManuscriptSegment {
+                node_id: "node-html-1".to_string(),
                 title: "Part One".to_string(),
                 doc_type: "part".to_string(),
                 body: String::new(),
                 heading_level: 1,
             },
             ManuscriptSegment {
+                node_id: "node-html-2".to_string(),
                 title: "Chapter 1".to_string(),
                 doc_type: "chapter".to_string(),
                 body: String::new(),
@@ -1237,10 +1418,110 @@ mod tests {
             },
         ]);
         let html = build_html_toc(&toc);
-        assert!(html.contains("<nav class=\"toc\">"));
+        assert!(html.contains("<nav class=\"toc\" role=\"navigation\" aria-label=\"Table of contents\">"));
         assert!(html.contains("Table of Contents"));
         assert!(html.contains("toc-h1"));
         assert!(html.contains("toc-h2"));
         assert!(html.contains("href=\"#part-one\""));
+    }
+
+    #[test]
+    fn render_html_wraps_body_in_container() {
+        let segments = vec![ManuscriptSegment {
+            node_id: "a".into(),
+            heading_level: 1,
+            title: "X".into(),
+            doc_type: "part".into(),
+            body: "Hello.".into(),
+        }];
+        let html = render_html(&segments, std::path::Path::new("/tmp"));
+        assert!(html.contains("<div class=\"manuscript-body\">"), "body wrapper opens");
+        // Tighter: confirm the wrapper closes just before </body>, not some other </div>.
+        assert!(html.contains("</div>\n</body>"), "body wrapper closes immediately before </body>");
+    }
+
+    #[test]
+    fn render_html_has_scene_break_asterism() {
+        let segments = vec![ManuscriptSegment {
+            node_id: "a".into(),
+            heading_level: 1,
+            title: "X".into(),
+            doc_type: "part".into(),
+            body: "Para.".into(),
+        }];
+        let html = render_html(&segments, std::path::Path::new("/tmp"));
+        assert!(html.contains("content: \"⁂\""), "scene break asterism present in CSS");
+    }
+
+    #[test]
+    fn render_html_has_literary_font_stack() {
+        let segments = vec![ManuscriptSegment {
+            node_id: "a".into(),
+            heading_level: 1,
+            title: "X".into(),
+            doc_type: "part".into(),
+            body: "Para.".into(),
+        }];
+        let html = render_html(&segments, std::path::Path::new("/tmp"));
+        assert!(html.contains("Palatino Linotype"), "Palatino Linotype in font stack");
+        assert!(html.contains("Iowan Old Style"), "Iowan Old Style in font stack");
+    }
+
+    // ── render_pdf smoke test ────────────────────────────────────────────
+
+    #[test]
+    fn render_pdf_produces_bytes() {
+        let segments = vec![
+            ManuscriptSegment {
+                node_id: "p1".into(),
+                heading_level: 1,
+                title: "Part One".into(),
+                doc_type: "part".into(),
+                body: String::new(),
+            },
+            ManuscriptSegment {
+                node_id: "ch1".into(),
+                heading_level: 2,
+                title: "Chapter 1".into(),
+                doc_type: "chapter".into(),
+                body: "The first words of the chapter.".into(),
+            },
+        ];
+        let bytes = render_pdf(&segments, "Test Book", std::path::Path::new("/tmp"))
+            .expect("render_pdf should succeed");
+        assert!(!bytes.is_empty(), "PDF output must be non-empty");
+        assert_eq!(&bytes[0..4], b"%PDF", "Must start with PDF magic bytes");
+    }
+
+    // ── Tasks 6 & 7 ─────────────────────────────────────────────────────
+
+    #[test]
+    fn strip_markdown_formatting_preserves_scene_break_sentinel() {
+        let input = "Para one.\n\n---\n\nPara two.";
+        let result = strip_markdown_formatting(input);
+        assert!(result.contains("\x00SCENE_BREAK\x00"), "sentinel emitted for ---");
+    }
+
+    #[test]
+    fn format_thousands_basic() {
+        assert_eq!(format_thousands(0), "0");
+        assert_eq!(format_thousands(999), "999");
+        assert_eq!(format_thousands(1000), "1,000");
+        assert_eq!(format_thousands(45000), "45,000");
+        assert_eq!(format_thousands(1234567), "1,234,567");
+    }
+
+    #[test]
+    fn render_pdf_handles_scene_break() {
+        let segments = vec![ManuscriptSegment {
+            node_id: "a".into(),
+            heading_level: 1,
+            title: "X".into(),
+            doc_type: "part".into(),
+            body: "Para one.\n\n---\n\nPara two.".into(),
+        }];
+        let bytes = render_pdf(&segments, "T", std::path::Path::new("/tmp")).expect("render");
+        assert!(!bytes.is_empty());
+        assert_eq!(&bytes[0..4], b"%PDF");
     }
 }

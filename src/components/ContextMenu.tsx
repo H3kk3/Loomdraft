@@ -1,4 +1,6 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useLayoutEffect } from "react";
+import type { Status } from "../types";
+import { StatusSubmenu } from "./StatusSubmenu";
 
 export interface ContextMenuProps {
   nodeId: string;
@@ -9,6 +11,10 @@ export interface ContextMenuProps {
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  // v0.3 additions
+  currentStatus?: Status;
+  onSetStatus?: (nodeId: string, status: Status) => void;
+  onEditTags?: (nodeId: string) => void;
 }
 
 export function ContextMenu({
@@ -20,9 +26,22 @@ export function ContextMenu({
   onRename,
   onDelete,
   onClose,
+  currentStatus,
+  onSetStatus,
+  onEditTags,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [focusIdx, setFocusIdx] = useState(0);
+  const [position, setPosition] = useState({ top: y, left: x });
+
+  useLayoutEffect(() => {
+    if (!menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    const margin = 8;
+    const top = Math.min(y, window.innerHeight - rect.height - margin);
+    const left = Math.min(x, window.innerWidth - rect.width - margin);
+    setPosition({ top: Math.max(margin, top), left: Math.max(margin, left) });
+  }, [x, y]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -72,8 +91,8 @@ export function ContextMenu({
       aria-label="Context menu"
       style={{
         position: "fixed",
-        top: Math.min(y, window.innerHeight - 160),
-        left: Math.min(x, window.innerWidth - 160),
+        top: position.top,
+        left: position.left,
         zIndex: 200,
       }}
       onMouseDown={(e) => e.stopPropagation()}
@@ -114,6 +133,30 @@ export function ContextMenu({
         >
           Delete…
         </button>
+      )}
+      {!isRoot && onEditTags && (
+        <button
+          className="context-menu-item"
+          role="menuitem"
+          onClick={() => {
+            onEditTags(nodeId);
+            onClose();
+          }}
+        >
+          Edit tags…
+        </button>
+      )}
+      {!isRoot && onSetStatus && (
+        <>
+          <div className="context-menu-separator" role="separator" />
+          <StatusSubmenu
+            current={currentStatus}
+            onSelect={(status) => {
+              onSetStatus(nodeId, status);
+              onClose();
+            }}
+          />
+        </>
       )}
     </div>
   );

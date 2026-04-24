@@ -291,11 +291,12 @@
   background: none;
   border: none;
   border-radius: 0;
-  text-align: left;
   padding: 7px 14px;
   font-size: 13px;
   color: var(--text);
   width: 100%;
+  display: flex;
+  align-items: center;
 }
 .context-menu-item:hover {
   background: var(--bg-2);
@@ -308,13 +309,45 @@
   background: rgba(224, 82, 82, 0.12);
 }
 
+.context-menu-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  padding: 8px 12px 4px;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.status-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.status-label {
+  flex: 1;
+}
+
+.context-menu-check {
+  margin-left: auto;
+  color: var(--accent);
+}
+
 /* ── Drag and drop (pointer-event based) ──────────────────────────────────── */
 
 .tree-row.dragging {
   opacity: 0.5;
-  border-left: 3px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
-  transition: opacity 0.15s, border-left-color 0.15s;
+  transition: opacity 0.15s;
 }
 
 /* During an active drag, force grabbing cursor everywhere and prevent

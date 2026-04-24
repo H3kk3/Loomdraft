@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { DocTypeDefinition } from "../types";
+import type { DocTypeDefinition, TemplateId } from "../types";
+import { TEMPLATES } from "../types";
 
 // ── NewProjectDialog ──────────────────────────────────────────────────────────
 
 interface NewProjectDialogProps {
-  onConfirm: (dir: string, name: string) => void;
+  onConfirm: (dir: string, name: string, template: TemplateId) => void;
   onCancel: () => void;
 }
 
 export function NewProjectDialog({ onConfirm, onCancel }: NewProjectDialogProps) {
   const [dir, setDir] = useState("");
   const [name, setName] = useState("");
+  const [template, setTemplate] = useState<TemplateId>("blank");
 
   const slug = name.trim().replace(/\s+/g, "-");
   const preview = dir && slug ? `${dir}/${slug}` : null;
@@ -47,12 +49,27 @@ export function NewProjectDialog({ onConfirm, onCancel }: NewProjectDialogProps)
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && canCreate) onConfirm(dir, name.trim());
+              if (e.key === "Enter" && canCreate) onConfirm(dir, name.trim(), template);
               if (e.key === "Escape") onCancel();
             }}
             placeholder="My Novel"
           />
         </label>
+
+        <label>
+          Template
+          <select
+            value={template}
+            onChange={(e) => setTemplate(e.target.value as TemplateId)}
+          >
+            {TEMPLATES.map((t) => (
+              <option key={t.id} value={t.id}>{t.label}</option>
+            ))}
+          </select>
+        </label>
+        <p className="template-description">
+          {TEMPLATES.find((t) => t.id === template)?.description}
+        </p>
 
         {preview && (
           <p className="path-preview">
@@ -68,7 +85,7 @@ export function NewProjectDialog({ onConfirm, onCancel }: NewProjectDialogProps)
             type="button"
             className="primary"
             disabled={!canCreate}
-            onClick={() => onConfirm(dir, name.trim())}
+            onClick={() => onConfirm(dir, name.trim(), template)}
           >
             Create project
           </button>

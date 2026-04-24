@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { ProjectManifest, DocumentContent, ExportResult } from "./types";
+import type { ProjectManifest, DocumentContent, ExportResult, TemplateId } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { Editor } from "./components/Editor";
 import { NewProjectDialog, AddNodeDialog } from "./components/Dialogs";
@@ -13,7 +13,13 @@ import { ToastStack, createToast, type ToastData } from "./components/Toast";
 import { DocTypeSettings } from "./components/DocTypeSettings";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { Onboarding } from "./components/Onboarding";
+import { Corkboard } from "./components/Corkboard";
+import { ReadThrough } from "./components/ReadThrough";
+import { TagsEditor } from "./components/TagsEditor";
 import { useTheme } from "./useTheme";
+import { useCorkboardData } from "./useCorkboardData";
+import { applyTheme } from "./themes/applyTheme";
+import { useProjectMetadata } from "./useProjectMetadata";
 import {
   getManuscriptDocTypes,
   getPlanningDocTypes,
@@ -230,6 +236,10 @@ export default function App() {
     resetFont,
   } = useTheme();
   const [projectPath, setProjectPath] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"editor" | "corkboard" | "readthrough">("editor");
+  const [corkboardDensity, setCorkboardDensity] = useState<"compact" | "comfortable" | "full">("comfortable");
+  const metadataHandle = useProjectMetadata(projectPath);
+  const corkboardHandle = useCorkboardData(projectPath, viewMode === "corkboard");
   const [manifest, setManifest] = useState<ProjectManifest | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [document, setDocument] = useState<DocumentContent | null>(null);
@@ -249,6 +259,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(
     () => !localStorage.getItem("loomdraft:onboarding_completed"),
   );
+  const [tagsEditorFor, setTagsEditorFor] = useState<string | null>(null);
   const selectedNodeIdRef = useRef<string | null>(null);
   const projectPathRef = useRef<string | null>(null);
 
@@ -264,6 +275,22 @@ export default function App() {
     localStorage.setItem("loomdraft:onboarding_completed", "true");
     setShowOnboarding(false);
   }, []);
+
+  // When metadata mutates while corkboard is active, refresh corkboard data.
+  useEffect(() => {
+    if (viewMode === "corkboard") {
+      void corkboardHandle.reload();
+    }
+    // Only depend on metadata identity and viewMode — corkboardHandle.reload is stable via useCallback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metadataHandle.metadata, viewMode]);
+
+  // ── Re-apply theme with per-project status color overrides ───────────────
+  useEffect(() => {
+    if (activeTheme) {
+      applyTheme(activeTheme, manifest?.status_colors ?? null);
+    }
+  }, [activeTheme, manifest?.status_colors]);
 
   // ── Theme/font operations with toast notifications ──────────────────────
   const handleImportTheme = useCallback(async () => {
@@ -315,6 +342,14 @@ export default function App() {
         e.preventDefault();
         setShowShortcuts((v) => !v);
       }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        if (projectPath) setViewMode((v) => (v === "corkboard" ? "editor" : "corkboard"));
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "r" || e.key === "R")) {
+        e.preventDefault();
+        if (projectPath) setViewMode((v) => (v === "readthrough" ? "editor" : "readthrough"));
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -344,15 +379,23 @@ export default function App() {
 
   // ── Project actions ──────────────────────────────────────────────────────
 
-  const handleNewProjectConfirm = async (dir: string, name: string) => {
+  const handleNewProjectConfirm = async (dir: string, name: string, template: TemplateId) => {
     setShowNewProject(false);
     setLoading(true);
     try {
-      const [path, mf] = await invoke<[string, ProjectManifest]>("create_project", { dir, name });
+      const [path, mf] =
+        template === "blank"
+          ? await invoke<[string, ProjectManifest]>("create_project", { dir, name })
+          : await invoke<[string, ProjectManifest]>("create_project_from_template", {
+              dir,
+              name,
+              templateId: template,
+            });
       setProjectPath(path);
       setManifest(mf);
       setSelectedNodeId(null);
       setDocument(null);
+      setViewMode("editor");
       addRecentProject(path);
     } catch (e) {
       setError(String(e));
@@ -370,6 +413,7 @@ export default function App() {
       setManifest(mf);
       setSelectedNodeId(null);
       setDocument(null);
+      setViewMode("editor");
       addRecentProject(dir);
     } catch (e) {
       setError(String(e));
@@ -417,6 +461,11 @@ export default function App() {
         nodeId,
         content,
       });
+
+      // v0.3: metadata changes flow exclusively through the v0.3 UI paths (status menu,
+      // tags editor), which update the hook's local state optimistically. Body saves via
+      // `save_document` don't touch frontmatter metadata fields, so no reload is needed
+      // here. If a future feature allows raw frontmatter editing, add a reload back.
 
       // Ignore stale async save responses if user already navigated away.
       if (selectedNodeIdRef.current === nodeId) {
@@ -594,8 +643,12 @@ export default function App() {
   }
 
   return (
-    <div className={`layout${editorDistractionFree ? " focus-layout" : ""}`}>
-      {!editorDistractionFree && (
+    <div
+      className={`layout${
+        editorDistractionFree || viewMode === "readthrough" ? " focus-layout" : ""
+      }`}
+    >
+      {!editorDistractionFree && viewMode !== "readthrough" && (
         <Sidebar
           manifest={manifest}
           selectedId={selectedNodeId}
@@ -608,6 +661,7 @@ export default function App() {
           onClose={handleCloseProject}
           onSearch={() => setShowSearch(true)}
           onDocTypeSettings={() => setShowDocTypeSettings(true)}
+          onEnterReadThrough={() => setViewMode("readthrough")}
           theme={theme}
           onToggleTheme={toggleTheme}
           activeThemeId={activeThemeId}
@@ -620,11 +674,14 @@ export default function App() {
           fontPrefs={fontPrefs}
           onImportFont={handleImportFont}
           onResetFont={resetFont}
+          metadataHandle={metadataHandle}
+          onEditTags={(id) => setTagsEditorFor(id)}
+          onToast={showToast}
         />
       )}
 
       <main className="main">
-        {document && selectedNodeId && !editorDistractionFree && (
+        {viewMode === "editor" && document && selectedNodeId && !editorDistractionFree && (
           <div className="breadcrumb">
             {buildBreadcrumb(manifest, selectedNodeId).map((crumb, i, arr) => (
               <span key={crumb.id}>
@@ -639,7 +696,73 @@ export default function App() {
             ))}
           </div>
         )}
-        {document ? (
+        {viewMode === "readthrough" ? (
+          projectPath ? (
+            <ReadThrough
+              projectPath={projectPath}
+              onJumpToDoc={(id) => {
+                setViewMode("editor");
+                handleSelectNode(id);
+              }}
+              onExit={() => setViewMode("editor")}
+            />
+          ) : (
+            <div className="readthrough-view">
+              <p className="readthrough-status">Open a project to read through.</p>
+            </div>
+          )
+        ) : viewMode === "corkboard" ? (
+          corkboardHandle.loading || !corkboardHandle.data || !manifest ? (
+            <div className="corkboard-view" role="region" aria-label="Loading corkboard">
+              <p style={{ padding: 24, color: "var(--text-dim)" }}>Loading corkboard…</p>
+            </div>
+          ) : (
+            <Corkboard
+              manifest={manifest}
+              metadata={metadataHandle.metadata}
+              data={corkboardHandle.data}
+              density={corkboardDensity}
+              onDensityChange={setCorkboardDensity}
+              selectedId={selectedNodeId}
+              tagColors={manifest.tag_colors ?? {}}
+              onSelect={setSelectedNodeId}
+              onOpen={(id) => {
+                setViewMode("editor");
+                handleSelectNode(id);
+              }}
+              currentStatusFor={(id) => metadataHandle.metadata[id]?.status}
+              onSetStatus={async (id, status) => {
+                try {
+                  await metadataHandle.updateNode(id, { status });
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  showToast(`Failed to set status: ${msg}`, "error");
+                }
+              }}
+              onEditTags={(id) => setTagsEditorFor(id)}
+              onReorder={async (cardId, newParentId, position) => {
+                if (!projectPath) return;
+                // Clamp position to sibling count defensively (backend also clamps).
+                const parent = manifest?.nodes[newParentId];
+                const siblingCount = parent?.children.length ?? 0;
+                const safePosition = Math.max(0, Math.min(position, siblingCount));
+                try {
+                  const updated = await invoke<ProjectManifest>("move_node", {
+                    projectPath,
+                    nodeId: cardId,
+                    newParentId,
+                    position: safePosition,
+                  });
+                  setManifest(updated);
+                  void corkboardHandle.reload();
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  showToast(`Move failed: ${msg}`, "error");
+                }
+              }}
+            />
+          )
+        ) : document ? (
           <Editor
             doc={document}
             onSave={handleSaveDocument}
@@ -773,6 +896,20 @@ export default function App() {
       {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
+
+      {tagsEditorFor && projectPath && manifest && metadataHandle && (
+        <TagsEditor
+          projectPath={projectPath}
+          manifest={manifest}
+          currentTags={metadataHandle.metadata[tagsEditorFor]?.tags ?? []}
+          onSave={async (newTags) => {
+            await metadataHandle.updateNode(tagsEditorFor, { tags: newTags });
+          }}
+          onManifestUpdate={setManifest}
+          onError={(msg) => showToast(msg, "error")}
+          onClose={() => setTagsEditorFor(null)}
+        />
+      )}
     </div>
   );
 }

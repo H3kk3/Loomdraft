@@ -6,6 +6,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
+use crate::frontmatter::{DocumentFrontmatter, Status, parse_frontmatter, write_frontmatter};
+
 // ── Doc type definitions ──────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +56,14 @@ pub struct ProjectManifest {
     pub nodes: HashMap<String, ProjectNode>,
     #[serde(default)]
     pub doc_types: Vec<DocTypeDefinition>,
+
+    // v0.3: per-project tag colors (tag name -> hex color)
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub tag_colors: HashMap<String, String>,
+
+    // v0.3: optional per-project overrides for theme status colors
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_colors: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,20 +75,6 @@ pub struct ProjectNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub doc_type: Option<String>,
     pub children: Vec<String>,
-}
-
-// ── Frontmatter ───────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DocumentFrontmatter {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub doc_type: String,
-    pub title: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub created: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub modified: Option<String>,
 }
 
 // ── Result type returned to the frontend ─────────────────────────────────────
@@ -124,6 +120,8 @@ pub fn create_project(dir: &Path, name: &str) -> Result<(PathBuf, ProjectManifes
         root: "node_root".to_string(),
         nodes,
         doc_types: default_doc_types(),
+        tag_colors: HashMap::new(),
+        status_colors: None,
     };
 
     save_manifest(&project_path, &manifest)?;
@@ -155,6 +153,20 @@ pub fn save_manifest(project_path: &Path, manifest: &ProjectManifest) -> Result<
         .map_err(|e| format!("Cannot serialize manifest: {e}"))?;
     fs::write(&tmp_path, &raw).map_err(|e| format!("Cannot write project.json.tmp: {e}"))?;
     fs::rename(&tmp_path, &path).map_err(|e| format!("Cannot finalize project.json: {e}"))
+}
+
+/// Atomically writes `content` to `target` by writing to a sibling `.tmp` file
+/// and renaming. Prevents partial writes if the process dies mid-write.
+pub(crate) fn atomic_write(target: &Path, content: &str) -> Result<(), String> {
+    let tmp = {
+        let mut t = target.to_path_buf();
+        let original_ext = t.extension().and_then(|e| e.to_str()).unwrap_or("").to_string();
+        t.set_extension(format!("{original_ext}.tmp"));
+        t
+    };
+    fs::write(&tmp, content).map_err(|e| format!("Cannot write {}: {e}", tmp.display()))?;
+    fs::rename(&tmp, target).map_err(|e| format!("Cannot rename {} to {}: {e}", tmp.display(), target.display()))?;
+    Ok(())
 }
 
 // ── Backup system ──────────────────────────────────────────────────────────────
@@ -392,9 +404,7 @@ pub fn save_document(
     fm.modified = Some(Utc::now().to_rfc3339());
 
     let raw = write_frontmatter(&fm, content)?;
-    let tmp_path = file_path.with_extension("md.tmp");
-    fs::write(&tmp_path, &raw).map_err(|e| format!("Cannot write temp file: {e}"))?;
-    fs::rename(&tmp_path, &file_path).map_err(|e| format!("Cannot finalize file: {e}"))?;
+    atomic_write(&file_path, &raw)?;
 
     // Keep manifest title in sync
     if let Some(n) = manifest.nodes.get_mut(node_id) {
@@ -499,10 +509,12 @@ pub fn add_node(
         title: title.to_string(),
         created: Some(Utc::now().to_rfc3339()),
         modified: None,
+        synopsis: None,
+        tags: Vec::new(),
+        status: Status::default(),
     };
     let raw = write_frontmatter(&fm, "")?;
-    fs::write(project_path.join(&file_rel), raw)
-        .map_err(|e| format!("Cannot create document file: {e}"))?;
+    atomic_write(&project_path.join(&file_rel), &raw)?;
 
     manifest.nodes.insert(
         node_id.clone(),
@@ -692,8 +704,7 @@ pub fn rename_node(
             if let Some((mut fm, body)) = parse_frontmatter(&raw) {
                 fm.title = new_title.to_string();
                 fm.modified = Some(Utc::now().to_rfc3339());
-                fs::write(&file_path, write_frontmatter(&fm, &body)?)
-                    .map_err(|e| e.to_string())?;
+                atomic_write(&file_path, &write_frontmatter(&fm, &body)?)?;
             }
         }
     }
@@ -786,51 +797,7 @@ pub fn extract_wiki_links(content: &str) -> Vec<String> {
         .collect()
 }
 
-// ── Frontmatter helpers ───────────────────────────────────────────────────────
-
-pub fn parse_frontmatter(content: &str) -> Option<(DocumentFrontmatter, String)> {
-    // Strip BOM
-    let content = content.trim_start_matches('\u{feff}');
-    // Normalise CRLF
-    let owned: String;
-    let content = if content.contains('\r') {
-        owned = content.replace("\r\n", "\n");
-        &owned
-    } else {
-        content
-    };
-
-    if !content.starts_with("---\n") {
-        return None;
-    }
-
-    let rest = &content[4..]; // skip opening "---\n"
-    let end = rest.find("\n---\n")?;
-    let yaml = &rest[..end];
-    // body starts after "\n---\n" (5 chars)
-    let body = rest[end + 5..].trim_start_matches('\n').to_string();
-
-    let fm: DocumentFrontmatter = serde_yaml::from_str(yaml).ok()?;
-    Some((fm, body))
-}
-
-pub fn write_frontmatter(fm: &DocumentFrontmatter, body: &str) -> Result<String, String> {
-    let yaml = serde_yaml::to_string(fm)
-        .map_err(|e| format!("Cannot serialize frontmatter: {e}"))?;
-    Ok(format!("---\n{}---\n\n{}", yaml, body))
-}
-
 // ── Private helpers ───────────────────────────────────────────────────────────
-
-fn default_frontmatter(node_id: &str, node: &ProjectNode) -> DocumentFrontmatter {
-    DocumentFrontmatter {
-        id: node_id.to_string(),
-        doc_type: node.doc_type.clone().unwrap_or_else(|| "chapter".to_string()),
-        title: node.title.clone().unwrap_or_else(|| "Untitled".to_string()),
-        created: Some(Utc::now().to_rfc3339()),
-        modified: None,
-    }
-}
 
 fn title_to_slug(title: &str) -> String {
     let s: String = title
@@ -893,76 +860,24 @@ fn unique_filename(dir: PathBuf, prefix: &str, slug: &str) -> String {
     }
 }
 
+fn default_frontmatter(node_id: &str, node: &ProjectNode) -> DocumentFrontmatter {
+    DocumentFrontmatter {
+        id: node_id.to_string(),
+        doc_type: node.doc_type.clone().unwrap_or_else(|| "chapter".to_string()),
+        title: node.title.clone().unwrap_or_else(|| "Untitled".to_string()),
+        created: Some(Utc::now().to_rfc3339()),
+        modified: None,
+        synopsis: None,
+        tags: Vec::new(),
+        status: Status::default(),
+    }
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── parse_frontmatter ────────────────────────────────────────────────
-
-    #[test]
-    fn parse_frontmatter_basic() {
-        let input = "---\nid: node-1\ntype: chapter\ntitle: My Chapter\n---\n\nHello world";
-        let (fm, body) = parse_frontmatter(input).expect("should parse");
-        assert_eq!(fm.id, "node-1");
-        assert_eq!(fm.doc_type, "chapter");
-        assert_eq!(fm.title, "My Chapter");
-        assert_eq!(body, "Hello world");
-    }
-
-    #[test]
-    fn parse_frontmatter_strips_bom() {
-        let input = "\u{feff}---\nid: n1\ntype: scene\ntitle: BOM test\n---\n\nBody";
-        let (fm, body) = parse_frontmatter(input).expect("should handle BOM");
-        assert_eq!(fm.id, "n1");
-        assert_eq!(body, "Body");
-    }
-
-    #[test]
-    fn parse_frontmatter_normalizes_crlf() {
-        let input = "---\r\nid: n1\r\ntype: chapter\r\ntitle: CRLF\r\n---\r\n\r\nBody text";
-        let (fm, body) = parse_frontmatter(input).expect("should handle CRLF");
-        assert_eq!(fm.title, "CRLF");
-        assert_eq!(body, "Body text");
-    }
-
-    #[test]
-    fn parse_frontmatter_returns_none_without_opening() {
-        assert!(parse_frontmatter("no frontmatter here").is_none());
-    }
-
-    #[test]
-    fn parse_frontmatter_returns_none_without_closing() {
-        assert!(parse_frontmatter("---\nid: n1\ntype: chapter\ntitle: Oops").is_none());
-    }
-
-    #[test]
-    fn parse_frontmatter_empty_body() {
-        let input = "---\nid: n1\ntype: chapter\ntitle: Empty\n---\n";
-        let (fm, body) = parse_frontmatter(input).expect("should parse");
-        assert_eq!(fm.title, "Empty");
-        assert_eq!(body, "");
-    }
-
-    // ── write_frontmatter ────────────────────────────────────────────────
-
-    #[test]
-    fn write_frontmatter_roundtrip() {
-        let fm = DocumentFrontmatter {
-            id: "node-42".to_string(),
-            doc_type: "scene".to_string(),
-            title: "Roundtrip".to_string(),
-            created: None,
-            modified: None,
-        };
-        let raw = write_frontmatter(&fm, "Body content").expect("should serialize");
-        let (parsed, body) = parse_frontmatter(&raw).expect("should roundtrip");
-        assert_eq!(parsed.id, "node-42");
-        assert_eq!(parsed.doc_type, "scene");
-        assert_eq!(parsed.title, "Roundtrip");
-        assert_eq!(body, "Body content");
-    }
 
     // ── extract_wiki_links ───────────────────────────────────────────────
 
@@ -1102,7 +1017,7 @@ mod tests {
             doc_type: None,
             children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes, doc_types: default_doc_types() };
+        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes, doc_types: default_doc_types(), tag_colors: HashMap::new(), status_colors: None };
 
         let result = collect_descendants(&manifest, "a");
         assert_eq!(result, vec!["a"]);
@@ -1135,7 +1050,7 @@ mod tests {
             doc_type: None,
             children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes, doc_types: default_doc_types() };
+        let manifest = ProjectManifest { version: 1, root: "root".to_string(), nodes, doc_types: default_doc_types(), tag_colors: HashMap::new(), status_colors: None };
 
         let mut result = collect_descendants(&manifest, "a");
         result.sort();
@@ -1150,7 +1065,7 @@ mod tests {
         nodes.insert("a".to_string(), ProjectNode {
             title: None, file: None, doc_type: None, children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes, doc_types: default_doc_types() };
+        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes, doc_types: default_doc_types(), tag_colors: HashMap::new(), status_colors: None };
         assert!(is_ancestor_or_self(&manifest, "a", "a"));
     }
 
@@ -1166,7 +1081,7 @@ mod tests {
         nodes.insert("c".to_string(), ProjectNode {
             title: None, file: None, doc_type: None, children: vec![],
         });
-        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes, doc_types: default_doc_types() };
+        let manifest = ProjectManifest { version: 1, root: "a".to_string(), nodes, doc_types: default_doc_types(), tag_colors: HashMap::new(), status_colors: None };
         assert!(!is_ancestor_or_self(&manifest, "a", "c"));
     }
 
@@ -1186,6 +1101,9 @@ mod tests {
             title: "Chapter One".to_string(),
             created: Some("2026-01-01T00:00:00Z".to_string()),
             modified: None,
+            synopsis: None,
+            tags: Vec::new(),
+            status: Status::default(),
         };
         let raw = write_frontmatter(&fm, "Original content").unwrap();
         fs::write(project.join("manuscript/chap--one.md"), &raw).unwrap();
@@ -1209,6 +1127,8 @@ mod tests {
             root: "node_root".to_string(),
             nodes,
             doc_types: default_doc_types(),
+            tag_colors: HashMap::new(),
+            status_colors: None,
         };
         save_manifest(&project, &manifest).unwrap();
 
@@ -1291,6 +1211,9 @@ mod tests {
             title: "Chapter One".to_string(),
             created: Some("2026-01-01T00:00:00Z".to_string()),
             modified: Some("2026-01-02T00:00:00Z".to_string()),
+            synopsis: None,
+            tags: Vec::new(),
+            status: Status::default(),
         };
         let new_raw = write_frontmatter(&fm, "Modified content").unwrap();
         fs::write(project.join("manuscript/chap--one.md"), &new_raw).unwrap();
@@ -1326,5 +1249,75 @@ mod tests {
         let (_tmp, project) = setup_backup_project();
         let result = restore_backup(&project, "node-1", "nonexistent");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn atomic_write_roundtrips() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("test.md");
+        atomic_write(&target, "hello").expect("write");
+        let content = std::fs::read_to_string(&target).unwrap();
+        assert_eq!(content, "hello");
+        // The .tmp file should not persist
+        let tmp = dir.path().join("test.md.tmp");
+        assert!(!tmp.exists());
+    }
+}
+
+#[cfg(test)]
+mod manifest_color_tests {
+    use super::*;
+
+    #[test]
+    fn manifest_loads_without_color_maps() {
+        let json = r#"{
+            "version": 1,
+            "root": "node_root",
+            "nodes": {}
+        }"#;
+        let manifest: ProjectManifest = serde_json::from_str(json).expect("should parse");
+        assert!(manifest.tag_colors.is_empty());
+        assert!(manifest.status_colors.is_none());
+    }
+
+    #[test]
+    fn manifest_loads_with_color_maps() {
+        let json = r##"{
+            "version": 1,
+            "root": "node_root",
+            "nodes": {},
+            "tag_colors": { "subplot-a": "#4a90e2" },
+            "status_colors": { "draft": "#888888" }
+        }"##;
+        let manifest: ProjectManifest = serde_json::from_str(json).expect("should parse");
+        assert_eq!(manifest.tag_colors.get("subplot-a"), Some(&"#4a90e2".to_string()));
+        let status = manifest.status_colors.expect("should have status_colors");
+        assert_eq!(status.get("draft"), Some(&"#888888".to_string()));
+    }
+
+    #[test]
+    fn manifest_omits_empty_color_maps_when_serializing() {
+        let mut manifest = ProjectManifest {
+            version: 1,
+            root: "root".to_string(),
+            nodes: HashMap::new(),
+            doc_types: Vec::new(),
+            tag_colors: HashMap::new(),
+            status_colors: None,
+        };
+        let json = serde_json::to_string(&manifest).expect("serialize");
+        // Empty maps / None should not bloat the manifest JSON
+        assert!(!json.contains("tag_colors"));
+        assert!(!json.contains("status_colors"));
+
+        manifest.tag_colors.insert("t".to_string(), "#fff".to_string());
+        let json = serde_json::to_string(&manifest).expect("serialize");
+        assert!(json.contains("tag_colors"));
+
+        let mut status_map = HashMap::new();
+        status_map.insert("draft".to_string(), "#888888".to_string());
+        manifest.status_colors = Some(status_map);
+        let json = serde_json::to_string(&manifest).expect("serialize");
+        assert!(json.contains("status_colors"));
     }
 }

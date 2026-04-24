@@ -46,7 +46,10 @@ import {
 import type { Theme } from "../useTheme";
 import type { ThemeMetadata, FontInfo, FontPreference } from "../themes/themeTypes";
 import { ThemePicker } from "./ThemePicker";
-import type { ProjectManifest, DocTypeDefinition } from "../types";
+import { parseFilterQuery, matchesFilter } from "../utils/filter";
+import { STATUS_VALUES } from "../types";
+import type { ProjectManifest, DocTypeDefinition, ProjectMetadata } from "../types";
+import type { ProjectMetadataHandle } from "../useProjectMetadata";
 import type { DocCategory } from "../docTypes";
 import { DRAG_THRESHOLD_PX } from "../constants";
 import { TreeNode, type DropTarget, type DropPos } from "./TreeNode";
@@ -74,25 +77,38 @@ function findParent(manifest: ProjectManifest, nodeId: string): string | null {
 
 /** Compute which nodes should be visible given a filter query.
  *  Returns null if no filter is active, or a Set of visible node IDs
- *  (matching nodes + all their ancestors up to root). */
+ *  (matching nodes + all their ancestors up to root).
+ *
+ *  Supports prefixed tokens (`type:scene`, `status:draft`, `tag:foreshadowing`)
+ *  combined with free text that matches the node title. See `utils/filter.ts`. */
 function computeVisibleNodes(
   manifest: ProjectManifest,
   query: string,
+  metadata: ProjectMetadata,
 ): Set<string> | null {
   if (!query.trim()) return null;
-  const lowerQ = query.toLowerCase();
-  const visible = new Set<string>();
+  const filter = parseFilterQuery(query);
 
+  // Build parent index once: O(N) where N = total nodes. Replaces O(N²) ancestor walks.
+  const parentIndex = new Map<string, string>();
+  for (const [parentId, node] of Object.entries(manifest.nodes)) {
+    for (const childId of node.children) {
+      parentIndex.set(childId, parentId);
+    }
+  }
+
+  const visible = new Set<string>();
   for (const [id, node] of Object.entries(manifest.nodes)) {
-    if ((node.title ?? id).toLowerCase().includes(lowerQ)) {
-      // Add this node and all ancestors
+    const title = node.title ?? id;
+    const docType = node.doc_type ?? "";
+    const meta = metadata[id] ?? { synopsis: null, tags: [], status: STATUS_VALUES[0] };
+    const matchable = { title, doc_type: docType };
+    if (matchesFilter(filter, matchable, meta)) {
       visible.add(id);
-      let current = id;
-      let parent = findParent(manifest, current);
-      while (parent) {
-        visible.add(parent);
-        current = parent;
-        parent = findParent(manifest, current);
+      let current: string | undefined = parentIndex.get(id);
+      while (current !== undefined) {
+        visible.add(current);
+        current = parentIndex.get(current);
       }
     }
   }
@@ -143,6 +159,7 @@ export interface SidebarProps {
   onClose: () => void;
   onSearch: () => void;
   onDocTypeSettings: () => void;
+  onEnterReadThrough: () => void;
   theme: Theme;
   onToggleTheme: () => void;
   // Extended theme system
@@ -156,6 +173,11 @@ export interface SidebarProps {
   fontPrefs: FontPreference;
   onImportFont: (target: "ui" | "mono") => void;
   onResetFont: (target: "ui" | "mono") => void;
+  // Provides project metadata (status, tags, synopsis) for filtering + future consumers (tree status strip, context menus).
+  metadataHandle?: ProjectMetadataHandle;
+  // Tag editor
+  onToast?: (message: string, type: "success" | "error") => void;
+  onEditTags?: (nodeId: string) => void;
 }
 
 export function Sidebar({
@@ -170,6 +192,7 @@ export function Sidebar({
   onClose,
   onSearch,
   onDocTypeSettings,
+  onEnterReadThrough,
   theme: _theme,
   onToggleTheme: _onToggleTheme,
   activeThemeId,
@@ -182,6 +205,9 @@ export function Sidebar({
   fontPrefs,
   onImportFont,
   onResetFont,
+  metadataHandle,
+  onToast,
+  onEditTags,
 }: SidebarProps) {
   const rootNode = manifest.nodes[manifest.root];
 
@@ -238,8 +264,8 @@ export function Sidebar({
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   const visibleNodes = useMemo(
-    () => computeVisibleNodes(manifest, treeFilter),
-    [manifest, treeFilter],
+    () => computeVisibleNodes(manifest, treeFilter, metadataHandle?.metadata ?? {}),
+    [manifest, treeFilter, metadataHandle?.metadata],
   );
 
   // Ctrl+Shift+E to focus filter
@@ -436,6 +462,13 @@ export function Sidebar({
           <button className="icon-btn" title="Export manuscript" onClick={onExport}>
             <Download size={15} strokeWidth={1.75} />
           </button>
+          <button
+            className="icon-btn"
+            title={`Read through manuscript (${mod}+Shift+R)`}
+            onClick={onEnterReadThrough}
+          >
+            <BookOpen size={15} strokeWidth={1.75} />
+          </button>
           <button className="icon-btn" title="Close project" onClick={onClose}>
             ×
           </button>
@@ -496,6 +529,7 @@ export function Sidebar({
         <TreeNode
           nodeId={manifest.root}
           manifest={manifest}
+          metadata={metadataHandle?.metadata}
           selectedId={selectedId}
           draggingId={draggingId}
           dropTarget={dropTarget}
@@ -534,6 +568,21 @@ export function Sidebar({
             setDeleteTarget(id);
           }}
           onClose={() => setContextMenu(null)}
+          currentStatus={metadataHandle?.metadata[contextMenu.nodeId]?.status}
+          onSetStatus={
+            metadataHandle
+              ? async (id, status) => {
+                  try {
+                    await metadataHandle.updateNode(id, { status });
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    console.error(`Failed to set status for ${id}:`, err);
+                    onToast?.(`Failed to set status: ${msg}`, "error");
+                  }
+                }
+              : undefined
+          }
+          onEditTags={metadataHandle ? onEditTags : undefined}
         />
       )}
 
@@ -548,6 +597,7 @@ export function Sidebar({
           onCancel={() => setDeleteTarget(null)}
         />
       )}
+
     </aside>
   );
 }

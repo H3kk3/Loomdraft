@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, memo } from "react";
 import { Folder, ChevronRight, ChevronDown } from "lucide-react";
-import type { ProjectManifest } from "../types";
+import type { ProjectManifest, ProjectMetadata } from "../types";
 import { isManuscriptDocType, type DocCategory } from "../docTypes";
 import { TREE_INDENT_PX } from "../constants";
 import { DocTypeIcon } from "./Sidebar";
@@ -17,6 +17,7 @@ export interface DropTarget {
 export interface TreeNodeProps {
   nodeId: string;
   manifest: ProjectManifest;
+  metadata?: ProjectMetadata;
   selectedId: string | null;
   draggingId: string | null;
   dropTarget: DropTarget | null;
@@ -95,6 +96,7 @@ function InlineRenameInput({
 export const TreeNode = memo(function TreeNode({
   nodeId,
   manifest,
+  metadata,
   selectedId,
   draggingId,
   dropTarget,
@@ -137,6 +139,9 @@ export const TreeNode = memo(function TreeNode({
   const dropPos = isOver ? dropTarget?.position : null;
   const isExpanded = expandedNodes.has(nodeId);
 
+  const status = metadata?.[nodeId]?.status;
+  const statusColor = status ? `var(--status-${status})` : "transparent";
+
   const rowClasses = [
     "tree-row",
     isSelected ? "selected" : "",
@@ -156,8 +161,12 @@ export const TreeNode = memo(function TreeNode({
     ? node.children.filter((childId) => !isManuscriptDocType(manifest.doc_types, manifest.nodes[childId]?.doc_type))
     : [];
 
+  // Note: `metadata` is the full ProjectMetadata map. When any node's metadata
+  // changes, the map reference changes and every TreeNode re-renders despite
+  // memo(). Acceptable for v0.3 tree sizes; revisit if profiling shows hotspots.
   const childProps = {
     manifest,
+    metadata,
     selectedId,
     draggingId,
     dropTarget,
@@ -187,6 +196,7 @@ export const TreeNode = memo(function TreeNode({
         ref={rowRef}
         className={rowClasses}
         data-node-id={nodeId}
+        style={{ boxShadow: `inset 3px 0 0 0 ${statusColor}` }}
         onPointerDown={(e) => {
           if (isRoot) return;
           if (e.button !== 0) return;

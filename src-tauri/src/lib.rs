@@ -1,14 +1,23 @@
 #![warn(clippy::all)]
 
+mod corkboard;
 mod db;
 mod error;
 mod export;
+mod frontmatter;
+mod metadata;
 mod project;
+mod snapshots;
+mod templates;
 mod theme;
 
+use corkboard::CorkboardData;
 use db::SearchResult;
 use error::LoomdraftError;
+use frontmatter::Status;
+use metadata::NodeMetadata;
 use project::{BackupEntry, DocTypeDefinition, DocumentContent, ProjectManifest};
+use snapshots::SnapshotEntry;
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -34,6 +43,32 @@ fn create_project(dir: String, name: String) -> CmdResult<(String, ProjectManife
     db::reindex(&conn, &path, &manifest)?;
 
     Ok((path.to_string_lossy().to_string(), manifest))
+}
+
+#[tauri::command]
+fn create_project_from_template(
+    dir: String,
+    name: String,
+    template_id: String,
+) -> CmdResult<(String, ProjectManifest)> {
+    let (path, manifest) = project::create_project(&PathBuf::from(&dir), name.trim())?;
+    let path_str = path.to_str().ok_or_else(|| {
+        LoomdraftError::Validation("Project path contains invalid characters".into())
+    })?;
+
+    // Index the blank project first.
+    let conn = db::open_db(&db_path(path_str))?;
+    db::reindex(&conn, &path, &manifest)?;
+
+    if template_id == "blank" {
+        return Ok((path.to_string_lossy().to_string(), manifest));
+    }
+
+    // Apply the template's node scaffolding.
+    let populated = templates::apply_template(&template_id, &path)?;
+    // Re-index after scaffolding adds nodes.
+    db::reindex(&conn, &path, &populated)?;
+    Ok((path.to_string_lossy().to_string(), populated))
 }
 
 #[tauri::command]
@@ -159,6 +194,82 @@ fn rename_node(
     Ok(project::rename_node(&PathBuf::from(&project_path), &node_id, &new_title)?)
 }
 
+// ── Metadata + color commands (v0.3) ─────────────────────────────────────────
+
+#[tauri::command]
+fn get_project_metadata(
+    project_path: String,
+) -> CmdResult<std::collections::HashMap<String, NodeMetadata>> {
+    let path = PathBuf::from(&project_path);
+    let manifest = project::load_manifest(&path)?;
+    Ok(metadata::collect_project_metadata(&path, &manifest))
+}
+
+/// Update a document's metadata (synopsis, tags, status).
+///
+/// IPC boundary note: `clear_synopsis: Option<bool>` is intentional.
+/// Tauri's default serde deserialization cannot distinguish an absent field
+/// from an explicit `null`, so `synopsis: Option<String>` alone cannot express
+/// "clear the existing synopsis" vs "leave it unchanged". The `clear_synopsis`
+/// flag resolves that ambiguity — when true, synopsis is cleared; otherwise
+/// `synopsis: Some(s)` sets it and `synopsis: None` leaves it unchanged.
+///
+/// From JavaScript, pass `clearSynopsis: true` (camelCase).
+#[tauri::command]
+fn update_node_metadata(
+    project_path: String,
+    node_id: String,
+    synopsis: Option<String>,
+    clear_synopsis: Option<bool>,
+    tags: Option<Vec<String>>,
+    status: Option<Status>,
+) -> CmdResult<NodeMetadata> {
+    let path = PathBuf::from(&project_path);
+    let manifest = project::load_manifest(&path)?;
+    Ok(metadata::update_node_metadata_on_disk(
+        &path,
+        &manifest,
+        &node_id,
+        synopsis,
+        clear_synopsis.unwrap_or(false),
+        tags,
+        status,
+    )?)
+}
+
+#[tauri::command]
+fn set_tag_color(
+    project_path: String,
+    tag: String,
+    color: Option<String>,
+) -> CmdResult<ProjectManifest> {
+    let path = PathBuf::from(&project_path);
+    let mut manifest = project::load_manifest(&path)?;
+    metadata::apply_tag_color(&path, &mut manifest, &tag, color)?;
+    Ok(manifest)
+}
+
+#[tauri::command]
+fn set_status_color(
+    project_path: String,
+    status: String,
+    color: Option<String>,
+) -> CmdResult<ProjectManifest> {
+    let path = PathBuf::from(&project_path);
+    let mut manifest = project::load_manifest(&path)?;
+    metadata::apply_status_color(&path, &mut manifest, &status, color)?;
+    Ok(manifest)
+}
+
+// ── Corkboard (v0.3 Plan B) ──────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_corkboard_data(project_path: String) -> CmdResult<CorkboardData> {
+    let path = PathBuf::from(&project_path);
+    let manifest = project::load_manifest(&path)?;
+    Ok(corkboard::collect_corkboard_data(&path, &manifest))
+}
+
 // ── Search & index commands ───────────────────────────────────────────────────
 
 #[tauri::command]
@@ -243,7 +354,7 @@ fn get_manuscript_word_count(project_path: String) -> CmdResult<WordCountResult>
         };
 
         // Strip frontmatter to count only body text
-        let body = match project::parse_frontmatter(&raw) {
+        let body = match frontmatter::parse_frontmatter(&raw) {
             Some((_fm, body)) => body,
             None => raw,
         };
@@ -398,6 +509,66 @@ fn restore_backup(
     Ok(doc)
 }
 
+// ── Snapshots (v0.3 Plan C) ──────────────────────────────────────────────────
+
+#[tauri::command]
+fn pin_snapshot(
+    project_path: String,
+    node_id: String,
+    timestamp: String,
+    name: String,
+) -> CmdResult<SnapshotEntry> {
+    Ok(snapshots::pin_snapshot(
+        &PathBuf::from(&project_path),
+        &node_id,
+        &timestamp,
+        &name,
+    )?)
+}
+
+#[tauri::command]
+fn unpin_snapshot(
+    project_path: String,
+    node_id: String,
+    snapshot_timestamp: String,
+) -> CmdResult<()> {
+    Ok(snapshots::unpin_snapshot(
+        &PathBuf::from(&project_path),
+        &node_id,
+        &snapshot_timestamp,
+    )?)
+}
+
+#[tauri::command]
+fn list_snapshots(project_path: String, node_id: String) -> CmdResult<Vec<SnapshotEntry>> {
+    Ok(snapshots::list_snapshots(
+        &PathBuf::from(&project_path),
+        &node_id,
+    )?)
+}
+
+#[tauri::command]
+fn restore_snapshot(
+    project_path: String,
+    node_id: String,
+    snapshot_timestamp: String,
+) -> CmdResult<DocumentContent> {
+    let doc = snapshots::restore_snapshot(
+        &PathBuf::from(&project_path),
+        &node_id,
+        &snapshot_timestamp,
+    )?;
+    // Re-index the restored content (mirror `restore_backup`'s behavior).
+    if let Ok(conn) = db::open_db(&db_path(&project_path)) {
+        let links = project::extract_wiki_links(&doc.content);
+        let _ = db::index_document(
+            &conn, &doc.id, &doc.doc_type, &doc.title, &doc.file, &doc.content, None,
+        );
+        let _ = db::update_links(&conn, &doc.id, &links);
+    }
+    Ok(doc)
+}
+
 // ── Export commands ──────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -467,6 +638,19 @@ fn export_manuscript(
         word_count,
         section_count: segments.len(),
     })
+}
+
+#[tauri::command]
+fn get_read_through_html(project_path: String) -> CmdResult<String> {
+    let path = PathBuf::from(&project_path);
+    let manifest = project::load_manifest(&path)?;
+    let segments = export::collect_manuscript_ordered(&manifest, &path);
+    if segments.is_empty() {
+        return Ok(String::new());
+    }
+    // Use body-only renderer (no embedded <style>, no TOC card, no <html> wrapper).
+    // The frontend's readthrough.css owns all the typography.
+    Ok(export::render_html_body(&segments, &path))
 }
 
 // ── Theme & font commands ────────────────────────────────────────────────────
@@ -577,6 +761,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             create_project,
+            create_project_from_template,
             open_project,
             get_project_tree,
             load_document,
@@ -585,6 +770,13 @@ pub fn run() {
             delete_node,
             rename_node,
             move_node,
+            // Metadata + colors (v0.3)
+            get_project_metadata,
+            update_node_metadata,
+            set_tag_color,
+            set_status_color,
+            // Corkboard (v0.3 Plan B)
+            get_corkboard_data,
             search_documents,
             get_backlinks,
             reindex_project,
@@ -595,8 +787,14 @@ pub fn run() {
             import_image,
             read_image_base64,
             export_manuscript,
+            get_read_through_html,
             list_backups,
             restore_backup,
+            // Snapshots (v0.3 Plan C)
+            pin_snapshot,
+            unpin_snapshot,
+            list_snapshots,
+            restore_snapshot,
             // Theme & font commands
             get_app_data_dir,
             list_custom_themes,
