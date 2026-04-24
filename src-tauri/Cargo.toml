@@ -1,6 +1,6 @@
 [package]
 name = "loomdraft"
-version = "0.2.0"
+version = "0.3.0"
 description = "A desktop writing app for long-form projects"
 authors = ["Hekke"]
 edition = "2021"
