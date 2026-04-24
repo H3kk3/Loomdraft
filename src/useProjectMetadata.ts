@@ -28,7 +28,12 @@ export function useProjectMetadata(projectPath: string | null): ProjectMetadataH
 
   const reload = useCallback(async () => {
     if (!projectPath) {
+      // Bump the generation so any in-flight load's late setState is discarded,
+      // and fully reset state to avoid a stuck `loading: true` or stale error.
+      reloadGenRef.current += 1;
       setMetadata({});
+      setLoading(false);
+      setError(null);
       return;
     }
     const gen = ++reloadGenRef.current;

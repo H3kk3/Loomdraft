@@ -1,6 +1,6 @@
 // src/components/Corkboard.tsx
 
-import { memo, useMemo, useState, useEffect, useCallback } from "react";
+import { memo, useMemo, useState, useEffect, useCallback, useRef } from "react";
 import type {
   ProjectManifest,
   ProjectMetadata,
@@ -160,6 +160,16 @@ export const Corkboard = memo(function Corkboard({
     position: number;
   } | null>(null);
 
+  // Refs mirror the state values so the window-level pointer handlers
+  // registered inside the `[drag]` effect always see the LATEST drop
+  // indicator and drag state, not the stale closure values from when the
+  // effect ran. Without this, pointerup's `dropIndicator` would almost
+  // always be null and drag-drop would silently no-op on release.
+  const dragRef = useRef<DragState | null>(null);
+  const dropIndicatorRef = useRef<{ targetChapterId: string; position: number } | null>(null);
+  useEffect(() => { dragRef.current = drag; }, [drag]);
+  useEffect(() => { dropIndicatorRef.current = dropIndicator; }, [dropIndicator]);
+
   const parentMap = useMemo(() => buildParentMap(manifest), [manifest]);
 
   const handleCardPointerDown = useCallback((id: string, x: number, y: number) => {
@@ -245,12 +255,17 @@ export const Corkboard = memo(function Corkboard({
     const DRAG_THRESHOLD = 4; // px
 
     const onMove = (e: PointerEvent) => {
+      // Always read the latest drag state from the ref so threshold-activation
+      // and hit-testing below use current data rather than the stale closure.
+      const currentDrag = dragRef.current;
+      if (!currentDrag) return;
+
       // Activate drag only after threshold
-      if (!drag.active) {
-        const dx = Math.abs(e.clientX - drag.startX);
-        const dy = Math.abs(e.clientY - drag.startY);
+      if (!currentDrag.active) {
+        const dx = Math.abs(e.clientX - currentDrag.startX);
+        const dy = Math.abs(e.clientY - currentDrag.startY);
         if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
-        setDrag({ ...drag, active: true });
+        setDrag({ ...currentDrag, active: true });
       }
 
       const target = document.elementFromPoint(e.clientX, e.clientY);
@@ -264,7 +279,7 @@ export const Corkboard = memo(function Corkboard({
       if (header && header.dataset.chapterDrop) {
         const targetChapterId = header.dataset.chapterDrop;
         // Only indicate drop if the card isn't already in this chapter.
-        if (parentMap.get(drag.cardId) !== targetChapterId) {
+        if (parentMap.get(currentDrag.cardId) !== targetChapterId) {
           setDropIndicator({
             targetChapterId,
             position: Number.MAX_SAFE_INTEGER, // append-to-end; clamped in App.tsx's onReorder
@@ -308,9 +323,13 @@ export const Corkboard = memo(function Corkboard({
     };
 
     const onUp = () => {
-      if (drag.active && dropIndicator) {
+      // Read latest values from refs — the state captured when this effect ran
+      // is always stale by pointerup time (drop indicator was null at effect start).
+      const currentDrag = dragRef.current;
+      const currentDrop = dropIndicatorRef.current;
+      if (currentDrag?.active && currentDrop) {
         // Fire-and-forget; the async reorder is awaited inside onReorder.
-        void onReorder(drag.cardId, dropIndicator.targetChapterId, dropIndicator.position).catch((err) => {
+        void onReorder(currentDrag.cardId, currentDrop.targetChapterId, currentDrop.position).catch((err) => {
           console.error("Corkboard reorder failed:", err);
         });
       }
@@ -324,7 +343,8 @@ export const Corkboard = memo(function Corkboard({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-    // drag and dropIndicator are captured per-effect-run. onReorder/manifest are stable enough.
+    // Handlers read state via refs (dragRef, dropIndicatorRef), so [drag] is
+    // the correct dep — we only need to re-register when a drag starts/ends.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drag]);
 

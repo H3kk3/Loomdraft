@@ -222,11 +222,16 @@ pub fn render_markdown(segments: &[ManuscriptSegment]) -> String {
     }
     toc_lines.push(String::new()); // blank line after TOC
 
-    // Build content sections
+    // Build content sections.
+    // We re-emit explicit `<a id="slug"></a>` anchor targets before each
+    // heading so the TOC bullet links resolve on renderers that don't
+    // auto-slugify headings, and so non-ASCII titles (where our slugifier
+    // diverges from GitHub's) still land on the right section.
     let mut parts: Vec<String> = Vec::new();
-    for seg in segments {
+    for (i, seg) in segments.iter().enumerate() {
         let prefix = heading_prefix_for_level(seg.heading_level);
-        let heading = format!("{} {}", prefix, seg.title);
+        let anchor = format!("<a id=\"{}\"></a>", toc[i].anchor);
+        let heading = format!("{}\n\n{} {}", anchor, prefix, seg.title);
 
         if seg.body.is_empty() {
             parts.push(heading);
@@ -1282,8 +1287,11 @@ mod tests {
         // Wiki links should be stripped
         assert!(md.contains("Chapter body with Aiko."));
         assert!(!md.contains("[["));
-        // No inline anchor tags in Markdown output
-        assert!(!md.contains("<a id="));
+        // Explicit <a id> anchor targets ensure TOC links resolve across
+        // renderers that don't auto-slugify headings (see commit restoring
+        // these after the first removal attempt).
+        assert!(md.contains("<a id=\"part-one\"></a>"));
+        assert!(md.contains("<a id=\"chapter-1\"></a>"));
     }
 
     #[test]
@@ -1386,8 +1394,9 @@ mod tests {
         assert!(md.contains("## Table of Contents"));
         assert!(md.contains("[Part One](#part-one)"));
         assert!(md.contains("[Chapter 1](#chapter-1)"));
-        // No inline anchor tags in Markdown output
-        assert!(!md.contains("<a id="));
+        // Explicit <a id> anchor targets back the TOC links on renderers that
+        // don't auto-slugify headings, and for non-ASCII titles.
+        assert!(md.contains("<a id=\"part-one\"></a>"));
     }
 
     #[test]

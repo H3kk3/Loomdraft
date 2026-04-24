@@ -25,7 +25,12 @@ export function useCorkboardData(
 
   const reload = useCallback(async () => {
     if (!projectPath || !enabled) {
+      // Bump the generation so any in-flight load's late setState is discarded,
+      // and fully reset state to avoid a stuck `loading: true` or stale error.
+      reloadGenRef.current += 1;
       setData(null);
+      setLoading(false);
+      setError(null);
       return;
     }
     const gen = ++reloadGenRef.current;

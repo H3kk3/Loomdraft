@@ -1,8 +1,9 @@
 // src/components/ReadThrough.tsx
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { X } from "lucide-react";
+import DOMPurify from "dompurify";
 import { mod } from "../utils/platform";
 
 export interface ReadThroughProps {
@@ -22,6 +23,21 @@ export const ReadThrough = memo(function ReadThrough({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // The backend runs comrak with `unsafe_: true` so our own `<a id>` and
+  // `<h{level} data-node-id>` markers survive markdown-to-HTML conversion.
+  // That same flag lets anything a user pastes into a .md body through —
+  // `<script>`, `onerror=...`, etc. Sanitize before injecting into the DOM.
+  // ALLOWED_ATTR retains `data-node-id` (used by click-to-jump) and `id`
+  // (used by anchors). Default DOMPurify already strips scripts and event
+  // handlers; we just add `data-node-id` to the allowlist.
+  const safeHtml = useMemo(
+    () =>
+      DOMPurify.sanitize(html, {
+        ADD_ATTR: ["data-node-id"],
+      }),
+    [html],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -107,8 +123,11 @@ export const ReadThrough = memo(function ReadThrough({
       <div
         ref={containerRef}
         className="readthrough-content"
+        // HTML is sanitized via DOMPurify (see `safeHtml` above). Scripts and
+        // event-handler attributes are stripped; `data-node-id` is kept so
+        // click-to-jump still works.
         // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: html }}
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     </div>
   );

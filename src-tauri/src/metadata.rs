@@ -169,12 +169,25 @@ pub fn apply_tag_color(
     save_manifest(project_path, manifest)
 }
 
+/// Supported status keys for per-project color overrides. Mirrors the `Status`
+/// enum's kebab-case serde output; kept as a const slice rather than iterating
+/// the enum to avoid pulling serde machinery into a validation path.
+const SUPPORTED_STATUS_KEYS: &[&str] = &[
+    "draft", "in-revision", "revised", "final", "stuck", "cut",
+];
+
 pub fn apply_status_color(
     project_path: &Path,
     manifest: &mut ProjectManifest,
     status: &str,
     color: Option<String>,
 ) -> Result<(), String> {
+    if !SUPPORTED_STATUS_KEYS.contains(&status) {
+        return Err(format!(
+            "Unknown status key '{status}'. Expected one of: {}",
+            SUPPORTED_STATUS_KEYS.join(", ")
+        ));
+    }
     if let Some(ref c) = color {
         validate_hex_color(c)?;
     }
