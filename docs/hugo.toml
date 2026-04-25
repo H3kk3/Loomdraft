@@ -4,12 +4,12 @@ title = "Loomdraft — Local-First Writing App"
 
 [params]
   description = "A distraction-free desktop writing app for novelists, screenwriters, and long-form creative writers"
-  version = "0.3.0"
+  version = "0.3.1"
   githubRepo = "https://github.com/H3kk3/Loomdraft"
-  downloadMacArm = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft_0.3.0_aarch64.dmg"
-  downloadMacIntel = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft_0.3.0_x64.dmg"
-  downloadWin = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft_0.3.0_x64-setup.exe"
-  downloadLinux = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft_0.3.0_amd64.deb"
+  downloadMacArm = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft_0.3.1_aarch64.dmg"
+  downloadMacIntel = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft_0.3.1_x64.dmg"
+  downloadWin = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft_0.3.1_x64-setup.exe"
+  downloadLinux = "https://github.com/H3kk3/Loomdraft/releases/latest/download/Loomdraft_0.3.1_amd64.deb"
 
 [sitemap]
   changefreq = "monthly"
