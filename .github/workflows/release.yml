@@ -29,6 +29,37 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Fail fast if the pushed tag doesn't match what every version-tracking
+      # file claims. Without this, a tag like v0.3.0 created on a commit that
+      # still says version 0.2.0 produces artifacts named Loomdraft_0.2.0_*
+      # (since Tauri reads the executable version from tauri.conf.json at build
+      # time, not from the tag). Runs on every matrix platform — cheap, fast,
+      # and Git Bash is available on the Windows runner via `shell: bash`.
+      - name: Verify tag matches version files
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "Tag version: $TAG_VERSION"
+
+          fail() { echo "::error::$1"; exit 1; }
+
+          CONF=$(grep -E '^\s*"version"' src-tauri/tauri.conf.json | head -1 | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+          [ "$CONF" = "$TAG_VERSION" ] || fail "src-tauri/tauri.conf.json has '$CONF', tag is 'v$TAG_VERSION'"
+
+          CARGO=$(grep -E '^version[[:space:]]*=' src-tauri/Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          [ "$CARGO" = "$TAG_VERSION" ] || fail "src-tauri/Cargo.toml has '$CARGO', tag is 'v$TAG_VERSION'"
+
+          PKG=$(grep -E '^\s*"version"' package.json | head -1 | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+          [ "$PKG" = "$TAG_VERSION" ] || fail "package.json has '$PKG', tag is 'v$TAG_VERSION'"
+
+          if [ -f docs/hugo.toml ]; then
+            HUGO=$(grep -E '^[[:space:]]*version[[:space:]]*=' docs/hugo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+            [ "$HUGO" = "$TAG_VERSION" ] || fail "docs/hugo.toml has '$HUGO', tag is 'v$TAG_VERSION'"
+          fi
+
+          echo "All version files match tag v$TAG_VERSION"
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
